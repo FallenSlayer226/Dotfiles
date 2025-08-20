@@ -5,8 +5,8 @@ configuration {
 	modi: "drun,run,window,emoji";
 }
 
-//@theme "/home/artorias/.config/rofi/themes/theme.rasi"
+//@theme "/home/ezio/.config/rofi/themes/theme.rasi"
 
-//@theme "/home/artorias/.config/rofi/themes/theme.rasi"
+//@theme "/home/ezio/.config/rofi/themes/theme.rasi"
 
-@theme "/home/artorias/.config/rofi/themes/theme.rasi"
+@theme "/home/ezio/.config/rofi/themes/theme.rasi"
