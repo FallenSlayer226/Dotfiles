@@ -1,0 +1,78 @@
+{
+    "position": "top",
+    "spacing": 4,
+    "modules-left": ["hyprland/workspaces"],
+    "modules-center": ["clock"],
+    "modules-right": ["group/tray", "hyprland/language", "mpris", "pulseaudio", "custom/exit"],
+    "margin-top": 4,
+    "margin-left": 4,
+    "margin-right": 4,
+    "margin-bottom": 0,
+
+    "hyprland/workspaces": {
+	"format": "{icon}",
+	"format-icons": {
+		"1": "",
+		"2": "",
+		"3": "",
+		"4": "",
+		"5": "",
+		"6": "",
+		"active": "",
+		"default": "" 
+	},
+         "persistent-workspaces": {
+           "*": [ 2, 3, 4, 5, 6 ]
+         }
+},
+
+    "group/tray": {
+      "orientation": "horizontal",
+      "drawer": {
+        "transition-duration": 500,
+        "transition-left-to-right": false,
+        "click-to-reveal": false
+      },
+      "modules": ["custom/traybutton", "tray"],
+    },
+
+    "tray": {
+      "icon-size": 21,
+      "spacing": 10
+    },
+
+    "clock": {
+      "format": "{:%A %I:%M}",
+    },
+
+    "custom/traybutton": {
+      "format": "",
+      "tooltip": false
+    },
+
+    "pulseaudio": {
+        "format": "   {volume}%",
+        "format-muted": "",
+        "on-click": "pavucontrol"
+    },
+
+    "mpris": {
+        "format": "{player_icon} {title}",
+        "max-length": 25,
+        "player-icons": {
+          "default": "󰎆 ",
+          "cmus": " ",
+          "mpv": "🎵",
+          "vlc": "🎬",
+          "spotify": " "
+        }
+    },
+
+    "custom/exit": {
+        "format": "",
+        "on-click": "~/.config/rofi/scripts/powermenu.sh",
+        "on-click-right": "hyprlock",
+        "tooltip-format": "Left: Power menu\nRight: Lock screen"
+    },
+}
+
