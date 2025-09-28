@@ -43,6 +43,7 @@
 
     "clock": {
       "format": "{:%A %I:%M}",
+      "tooltip": false
     },
 
     "custom/traybutton": {
@@ -53,10 +54,12 @@
     "pulseaudio": {
         "format": "   {volume}%",
         "format-muted": "",
-        "on-click": "pavucontrol"
+        "on-click": "pavucontrol",
+        "tooltip": false,
     },
 
     "mpris": {
+    	"tooltip": false,
         "format": "{player_icon} {title}",
         "max-length": 25,
         "player-icons": {
@@ -70,9 +73,8 @@
 
     "custom/exit": {
         "format": "",
-        "on-click": "~/.config/rofi/scripts/powermenu.sh",
+        "on-click": "~/.config/rofi/rofi-power-menu/powermenu.sh",
         "on-click-right": "hyprlock",
-        "tooltip-format": "Left: Power menu\nRight: Lock screen"
+        "tooltip": false,
     },
 }
-
