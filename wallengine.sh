@@ -29,12 +29,17 @@ wall_selection=$(ls "${wall_dir}" -t | while read -r A ; do  echo -en "$A\x00ico
 
 # Set the wallpaper with waypaper
 [[ -n "$wall_selection" ]] || exit 1
-waypaper --wallpaper ${wall_dir}${wall_selection} 
+waypaper --wallpaper ${wall_dir}${wall_selection}
 
 # Reload Rofi theme with new colors
 if [ -f "$HOME/.cache/wal/colors-rofi-dark.rasi" ]; then
     cp "$HOME/.cache/wal/colors-rofi-dark.rasi" "$HOME/.config/rofi/colors.rasi"
 fi
 
+# Reload Walcord
+walcord -i ${wall_dir}${wall_selection}
+
+
 # Reload waybar (Hyprland / sway users)
 pkill -SIGUSR2 waybar 2>/dev/null
+
