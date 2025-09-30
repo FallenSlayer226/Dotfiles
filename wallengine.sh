@@ -39,7 +39,6 @@ fi
 # Reload Walcord
 walcord -i ${wall_dir}${wall_selection}
 
-
 # Reload waybar (Hyprland / sway users)
 pkill -SIGUSR2 waybar 2>/dev/null
 
