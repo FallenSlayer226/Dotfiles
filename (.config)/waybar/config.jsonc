@@ -43,6 +43,7 @@
 
     "clock": {
       "format": "{:%A %I:%M}",
+      "on-click": "gnome-calendar",
       "tooltip": false
     },
 

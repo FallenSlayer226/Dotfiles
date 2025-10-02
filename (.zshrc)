@@ -10,9 +10,12 @@ cat ~/.cache/wal/sequences
 source ~/.cache/wal/colors-tty.sh
 
 fastfetch
+# XDG_CURRENT_DESKTOP=GNOME gnome-control-center # To change online accounts for calendars
 
 # Created by newuser for 5.9
 source ~/powerlevel10k/powerlevel10k.zsh-theme
 
 # To customize prompt, run `p10k configure` or edit ~/.p10k.zsh.
 [[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh
+
+export PATH=$PATH:/home/ezio/.spicetify
