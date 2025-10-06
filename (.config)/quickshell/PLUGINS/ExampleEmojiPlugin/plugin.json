@@ -1,0 +1,14 @@
+{
+    "id": "exampleEmojiPlugin",
+    "name": "Emoji Cycler",
+    "description": "Display cycling emojis in your bar with a handy emoji picker popout",
+    "version": "1.0.0",
+    "author": "AvengeMedia",
+    "icon": "mood",
+    "component": "./EmojiWidget.qml",
+    "settings": "./EmojiSettings.qml",
+    "permissions": [
+        "settings_read",
+        "settings_write"
+    ]
+}

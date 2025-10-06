@@ -1,0 +1,12 @@
+{
+    "id": "popoutControlExample",
+    "name": "Popout Control Example",
+    "description": "Example widget demonstrating PopoutService usage with pillClickAction",
+    "version": "1.0.0",
+    "author": "DankMaterialShell",
+    "icon": "widgets",
+    "type": "widget",
+    "component": "./PopoutControlWidget.qml",
+    "settings": "./PopoutControlSettings.qml",
+    "permissions": ["settings_read", "settings_write"]
+}
