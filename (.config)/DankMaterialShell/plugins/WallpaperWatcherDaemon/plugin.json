@@ -1,0 +1,15 @@
+{
+    "id": "wallpaperWatcherDaemon",
+    "name": "Wallpaper Watcher Daemon",
+    "description": "Background daemon that monitors wallpaper changes and logs them",
+    "version": "1.0.0",
+    "author": "DankMaterialShell",
+    "icon": "wallpaper",
+    "type": "daemon",
+    "component": "./WallpaperWatcherDaemon.qml",
+    "settings": "./WallpaperWatcherSettings.qml",
+    "permissions": [
+        "settings_read",
+        "settings_write"
+    ]
+}

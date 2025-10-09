@@ -1,6 +1,6 @@
 {
   "currentThemeName": "dynamic",
-  "customThemeFile": "",
+  "customThemeFile": "/home/ezio/Downloads/theme_cyberpunk_electric.json",
   "matugenScheme": "scheme-content",
   "dankBarTransparency": 0.15,
   "dankBarWidgetTransparency": 0.15,
@@ -180,6 +180,10 @@
       "all"
     ]
   },
-  "pluginSettings": {},
+  "pluginSettings": {
+    "wallpaperWatcherDaemon": {
+      "scriptPath": "/home/ezio/.config/quickshell/dms/matugen-trigger.sh"
+    }
+  },
   "animationSpeed": 2
 }
