@@ -595,7 +595,6 @@ DankModal {
                         required property bool fileIsDir
                         required property string filePath
                         required property string fileName
-                        required property url fileURL
                         required property int index
 
                         width: weMode ? 245 : 140
