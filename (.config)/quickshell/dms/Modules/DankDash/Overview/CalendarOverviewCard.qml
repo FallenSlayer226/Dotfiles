@@ -13,6 +13,8 @@ Rectangle {
     property var selectedDateEvents: []
     property bool hasEvents: selectedDateEvents && selectedDateEvents.length > 0
 
+    signal closeDash()
+
     function weekStartJs() {
         return Qt.locale().firstDayOfWeek % 7
     }
@@ -84,7 +86,7 @@ Rectangle {
     }
 
     radius: Theme.cornerRadius
-    color: Theme.surfaceContainerHigh
+    color: Theme.withAlpha(Theme.surfaceContainerHigh, Theme.popupTransparency)
     border.color: Qt.rgba(Theme.outline.r, Theme.outline.g, Theme.outline.b, 0.05)
     border.width: 1
 
@@ -92,12 +94,12 @@ Rectangle {
         anchors.fill: parent
         anchors.margins: Theme.spacingM
         spacing: Theme.spacingS
-        
+
         Item {
             width: parent.width
             height: 40
             visible: showEventDetails
-            
+
             Rectangle {
                 width: 32
                 height: 32
@@ -122,7 +124,7 @@ Rectangle {
                     onClicked: root.showEventDetails = false
                 }
             }
-            
+
             StyledText {
                 anchors.left: parent.left
                 anchors.right: parent.right
@@ -130,7 +132,14 @@ Rectangle {
                 anchors.rightMargin: Theme.spacingS
                 height: 40
                 anchors.verticalCenter: parent.verticalCenter
-                text: hasEvents ? (Qt.formatDate(selectedDate, "MMM d") + " • " + (selectedDateEvents.length === 1 ? "1 event" : selectedDateEvents.length + " events")) : Qt.formatDate(selectedDate, "MMM d")
+                text: {
+                    const dateStr = Qt.formatDate(selectedDate, "MMM d")
+                    if (selectedDateEvents && selectedDateEvents.length > 0) {
+                        const eventCount = selectedDateEvents.length === 1 ? I18n.tr("1 event") : selectedDateEvents.length + " " + I18n.tr("events")
+                        return dateStr + " • " + eventCount
+                    }
+                    return dateStr
+                }
                 font.pixelSize: Theme.fontSizeMedium
                 color: Theme.surfaceText
                 font.weight: Font.Medium
@@ -142,7 +151,7 @@ Rectangle {
             width: parent.width
             height: 28
             visible: !showEventDetails
-            
+
             Rectangle {
                 width: 28
                 height: 28
@@ -208,7 +217,7 @@ Rectangle {
                 }
             }
         }
-        
+
         Row {
             width: parent.width
             height: 18
@@ -241,14 +250,14 @@ Rectangle {
                 }
             }
         }
-        
+
         Grid {
             id: calendarGrid
             visible: !showEventDetails
-            
+
             property date displayDate: systemClock.date
             property date selectedDate: systemClock.date
-            
+
             readonly property date firstDay: {
                 const firstOfMonth = new Date(displayDate.getFullYear(), displayDate.getMonth(), 1)
                 return startOfWeek(firstOfMonth)
@@ -334,7 +343,7 @@ Rectangle {
             visible: showEventDetails
             clip: true
             spacing: Theme.spacingXS
-            
+
             delegate: Rectangle {
                 width: parent ? parent.width : 0
                 height: eventContent.implicitHeight + Theme.spacingS
@@ -345,7 +354,7 @@ Rectangle {
                     } else if (eventMouseArea.containsMouse) {
                         return Qt.rgba(Theme.primary.r, Theme.primary.g, Theme.primary.b, 0.06)
                     }
-                    return Theme.surfaceContainerHigh
+                    return Theme.withAlpha(Theme.surfaceContainerHigh, Theme.popupTransparency)
                 }
                 border.color: {
                     if (modelData.url && eventMouseArea.containsMouse) {
@@ -370,7 +379,7 @@ Rectangle {
 
                 Column {
                     id: eventContent
-                    
+
                     anchors.left: parent.left
                     anchors.right: parent.right
                     anchors.verticalCenter: parent.verticalCenter
@@ -392,7 +401,7 @@ Rectangle {
                         width: parent.width
                         text: {
                             if (!modelData || modelData.allDay) {
-                                return "All day"
+                                return I18n.tr("All day")
                             } else if (modelData.start && modelData.end) {
                                 const timeFormat = SettingsData.use24HourClock ? "HH:mm" : "h:mm AP"
                                 const startTime = Qt.formatTime(modelData.start, timeFormat)
@@ -412,7 +421,7 @@ Rectangle {
 
                 MouseArea {
                     id: eventMouseArea
-                    
+
                     anchors.fill: parent
                     hoverEnabled: true
                     cursorShape: modelData.url ? Qt.PointingHandCursor : Qt.ArrowCursor
@@ -421,22 +430,10 @@ Rectangle {
                         if (modelData.url && modelData.url !== "") {
                             if (Qt.openUrlExternally(modelData.url) === false) {
                                 console.warn("Failed to open URL: " + modelData.url)
+                            } else {
+                                root.closeDash()
                             }
                         }
-                    }
-                }
-
-                Behavior on color {
-                    ColorAnimation {
-                        duration: Theme.shortDuration
-                        easing.type: Theme.standardEasing
-                    }
-                }
-
-                Behavior on border.color {
-                    ColorAnimation {
-                        duration: Theme.shortDuration
-                        easing.type: Theme.standardEasing
                     }
                 }
             }

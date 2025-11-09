@@ -1,20 +1,24 @@
 import QtQuick
-import QtQuick.Effects
 import Quickshell
+import Quickshell.Hyprland
 import Quickshell.Wayland
 import qs.Common
+import qs.Services
 
 PanelWindow {
     id: root
 
-    WlrLayershell.namespace: "quickshell:modal"
+    property string layerNamespace: "dms:modal"
+    WlrLayershell.namespace: layerNamespace
 
     property alias content: contentLoader.sourceComponent
     property alias contentLoader: contentLoader
+    property Item directContent: null
     property real width: 400
     property real height: 300
     readonly property real screenWidth: screen ? screen.width : 1920
     readonly property real screenHeight: screen ? screen.height : 1080
+    readonly property real dpr: CompositorService.getScreenScale(screen)
     property bool showBackground: true
     property real backgroundOpacity: 0.5
     property string positioning: "center"
@@ -22,8 +26,11 @@ PanelWindow {
     property bool closeOnEscapeKey: true
     property bool closeOnBackgroundClick: true
     property string animationType: "scale"
-    property int animationDuration: Theme.shortDuration
-    property var animationEasing: Theme.emphasizedEasing
+    property int animationDuration: Theme.expressiveDurations.expressiveDefaultSpatial
+    property real animationScaleCollapsed: 0.96
+    property real animationOffset: Theme.spacingL
+    property list<real> animationEnterCurve: Theme.expressiveCurves.expressiveDefaultSpatial
+    property list<real> animationExitCurve: Theme.expressiveCurves.emphasized
     property color backgroundColor: Theme.surfaceContainer
     property color borderColor: Theme.outlineMedium
     property real borderWidth: 1
@@ -91,7 +98,7 @@ PanelWindow {
     Timer {
         id: closeTimer
 
-        interval: animationDuration + 100
+        interval: animationDuration + 120
         onTriggered: {
             visible = false
         }
@@ -104,91 +111,181 @@ PanelWindow {
         bottom: true
     }
 
+    MouseArea {
+        anchors.fill: parent
+        enabled: root.closeOnBackgroundClick && root.shouldBeVisible
+        onClicked: mouse => {
+                       const localPos = mapToItem(contentContainer, mouse.x, mouse.y)
+                       if (localPos.x < 0 || localPos.x > contentContainer.width || localPos.y < 0 || localPos.y > contentContainer.height) {
+                           root.backgroundClicked()
+                       }
+                   }
+    }
+
     Rectangle {
         id: background
 
         anchors.fill: parent
         color: "black"
-        opacity: root.showBackground ? (root.shouldBeVisible ? root.backgroundOpacity : 0) : 0
-        visible: root.showBackground
-
-        MouseArea {
-            anchors.fill: parent
-            enabled: root.closeOnBackgroundClick
-            onClicked: mouse => {
-                           const localPos = mapToItem(contentContainer, mouse.x, mouse.y)
-                           if (localPos.x < 0 || localPos.x > contentContainer.width || localPos.y < 0 || localPos.y > contentContainer.height) {
-                               root.backgroundClicked()
-                           }
-                       }
-        }
+        opacity: root.showBackground && SettingsData.modalDarkenBackground ? (root.shouldBeVisible ? root.backgroundOpacity : 0) : 0
+        visible: root.showBackground && SettingsData.modalDarkenBackground
 
         Behavior on opacity {
             NumberAnimation {
                 duration: root.animationDuration
-                easing.type: root.animationEasing
+                easing.type: Easing.BezierSpline
+                easing.bezierCurve: root.shouldBeVisible ? root.animationEnterCurve : root.animationExitCurve
             }
         }
     }
 
-    Rectangle {
-        id: contentContainer
+    Item {
+        id: modalContainer
 
-        width: root.width
-        height: root.height
-        anchors.centerIn: positioning === "center" ? parent : undefined
+        width: Theme.px(root.width, dpr)
+        height: Theme.px(root.height, dpr)
         x: {
-            if (positioning === "top-right") {
-                return Math.max(Theme.spacingL, root.screenWidth - width - Theme.spacingL)
+            if (positioning === "center") {
+                return Theme.snap((root.screenWidth - width) / 2, dpr)
+            } else if (positioning === "top-right") {
+                return Theme.px(Math.max(Theme.spacingL, root.screenWidth - width - Theme.spacingL), dpr)
             } else if (positioning === "custom") {
-                return root.customPosition.x
+                return Theme.snap(root.customPosition.x, dpr)
             }
             return 0
         }
         y: {
-            if (positioning === "top-right") {
-                return Theme.barHeight + Theme.spacingXS
+            if (positioning === "center") {
+                return Theme.snap((root.screenHeight - height) / 2, dpr)
+            } else if (positioning === "top-right") {
+                return Theme.px(Theme.barHeight + Theme.spacingXS, dpr)
             } else if (positioning === "custom") {
-                return root.customPosition.y
+                return Theme.snap(root.customPosition.y, dpr)
             }
             return 0
         }
-        color: root.backgroundColor
-        radius: root.cornerRadius
-        border.color: root.borderColor
-        border.width: root.borderWidth
-        layer.enabled: true
-        transform: root.animationType === "slide" ? slideTransform : null
 
-        Translate {
-            id: slideTransform
+        readonly property bool slide: root.animationType === "slide"
+        readonly property real offsetX: slide ? 15 : 0
+        readonly property real offsetY: slide ? -30 : root.animationOffset
 
-            x: root.shouldBeVisible ? 0 : 15
-            y: root.shouldBeVisible ? 0 : -30
+        property real animX: 0
+        property real animY: 0
+        property real scaleValue: root.animationScaleCollapsed
+
+        onOffsetXChanged: animX = Theme.snap(root.shouldBeVisible ? 0 : offsetX, root.dpr)
+        onOffsetYChanged: animY = Theme.snap(root.shouldBeVisible ? 0 : offsetY, root.dpr)
+
+        Connections {
+            target: root
+            function onShouldBeVisibleChanged() {
+                modalContainer.animX = Theme.snap(root.shouldBeVisible ? 0 : modalContainer.offsetX, root.dpr)
+                modalContainer.animY = Theme.snap(root.shouldBeVisible ? 0 : modalContainer.offsetY, root.dpr)
+                modalContainer.scaleValue = root.shouldBeVisible ? 1.0 : root.animationScaleCollapsed
+            }
         }
 
-        Loader {
-            id: contentLoader
-
-            anchors.fill: parent
-            active: root.keepContentLoaded || root.shouldBeVisible || root.visible
-            asynchronous: false
+        Behavior on animX {
+            NumberAnimation {
+                duration: root.animationDuration
+                easing.type: Easing.BezierSpline
+                easing.bezierCurve: root.shouldBeVisible ? root.animationEnterCurve : root.animationExitCurve
+            }
         }
 
-        layer.effect: MultiEffect {
-            shadowEnabled: true
-            shadowHorizontalOffset: 0
-            shadowVerticalOffset: 8
-            shadowBlur: 1
-            shadowColor: Theme.shadowStrong
-            shadowOpacity: 0.3
-            source: contentContainer
+        Behavior on animY {
+            NumberAnimation {
+                duration: root.animationDuration
+                easing.type: Easing.BezierSpline
+                easing.bezierCurve: root.shouldBeVisible ? root.animationEnterCurve : root.animationExitCurve
+            }
+        }
+
+        Behavior on scaleValue {
+            NumberAnimation {
+                duration: root.animationDuration
+                easing.type: Easing.BezierSpline
+                easing.bezierCurve: root.shouldBeVisible ? root.animationEnterCurve : root.animationExitCurve
+            }
+        }
+
+        Rectangle {
+            id: contentContainer
+
+            anchors.centerIn: parent
+            width: parent.width
+            height: parent.height
+            color: root.backgroundColor
+            radius: root.cornerRadius
+            border.color: root.borderColor
+            border.width: root.borderWidth
+            clip: false
+            layer.enabled: true
+            layer.smooth: false
+            layer.textureSize: Qt.size(width * root.dpr, height * root.dpr)
+            layer.textureMirroring: ShaderEffectSource.NoMirroring
             opacity: root.shouldBeVisible ? 1 : 0
+            scale: modalContainer.scaleValue
+            x: Theme.snap(modalContainer.animX + (parent.width - width) * (1 - modalContainer.scaleValue) * 0.5, root.dpr)
+            y: Theme.snap(modalContainer.animY + (parent.height - height) * (1 - modalContainer.scaleValue) * 0.5, root.dpr)
 
             Behavior on opacity {
                 NumberAnimation {
                     duration: animationDuration
-                    easing.type: animationEasing
+                    easing.type: Easing.BezierSpline
+                    easing.bezierCurve: root.shouldBeVisible ? root.animationEnterCurve : root.animationExitCurve
+                }
+            }
+
+            FocusScope {
+                anchors.fill: parent
+                focus: root.shouldBeVisible
+                clip: false
+
+                Item {
+                    id: directContentWrapper
+
+                    anchors.fill: parent
+                    visible: root.directContent !== null
+                    focus: true
+                    clip: false
+
+                    Component.onCompleted: {
+                        if (root.directContent) {
+                            root.directContent.parent = directContentWrapper
+                            root.directContent.anchors.fill = directContentWrapper
+                            Qt.callLater(() => root.directContent.forceActiveFocus())
+                        }
+                    }
+
+                    Connections {
+                        function onDirectContentChanged() {
+                            if (root.directContent) {
+                                root.directContent.parent = directContentWrapper
+                                root.directContent.anchors.fill = directContentWrapper
+                                Qt.callLater(() => root.directContent.forceActiveFocus())
+                            }
+                        }
+
+                        target: root
+                    }
+                }
+
+                Loader {
+                    id: contentLoader
+
+                    anchors.fill: parent
+                    active: root.directContent === null && (root.keepContentLoaded || root.shouldBeVisible || root.visible)
+                    asynchronous: false
+                    focus: true
+                    clip: false
+                    visible: root.directContent === null
+
+                    onLoaded: {
+                        if (item) {
+                            Qt.callLater(() => item.forceActiveFocus())
+                        }
+                    }
                 }
             }
         }

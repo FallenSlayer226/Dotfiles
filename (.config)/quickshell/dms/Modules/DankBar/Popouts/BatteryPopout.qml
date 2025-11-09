@@ -11,6 +11,8 @@ import qs.Widgets
 DankPopout {
     id: root
 
+    layerNamespace: "dms:battery"
+
     property var triggerScreen: null
 
     function setTriggerPosition(x, y, width, section, screen) {
@@ -56,7 +58,7 @@ DankPopout {
             id: batteryContent
 
             implicitHeight: contentColumn.implicitHeight + Theme.spacingL * 2
-            color: Theme.popupBackground()
+            color: Theme.withAlpha(Theme.surfaceContainer, Theme.popupTransparency)
             radius: Theme.cornerRadius
             border.color: Theme.outlineMedium
             border.width: 0
@@ -235,7 +237,7 @@ DankPopout {
                             }
 
                             StyledText {
-                                text: BatteryService.batteryAvailable ? BatteryService.batteryStatus : "Management"
+                                text: BatteryService.batteryStatus
                                 font.pixelSize: Theme.fontSizeLarge
                                 color: {
                                     if (BatteryService.isLowBattery && !BatteryService.isCharging) {
@@ -247,6 +249,7 @@ DankPopout {
                                     return Theme.surfaceText;
                                 }
                                 font.weight: Font.Medium
+                                visible: BatteryService.batteryAvailable
                                 anchors.verticalCenter: parent.verticalCenter
                             }
                         }
@@ -303,7 +306,7 @@ DankPopout {
                         width: (parent.width - Theme.spacingM) / 2
                         height: 64
                         radius: Theme.cornerRadius
-                        color: Theme.surfaceContainerHigh
+                        color: Theme.withAlpha(Theme.surfaceContainerHigh, Theme.popupTransparency)
                         border.width: 0
 
                         Column {
@@ -311,7 +314,7 @@ DankPopout {
                             spacing: Theme.spacingXS
 
                             StyledText {
-                                text: "Health"
+                                text: I18n.tr("Health")
                                 font.pixelSize: Theme.fontSizeSmall
                                 color: Theme.primary
                                 font.weight: Font.Medium
@@ -338,7 +341,7 @@ DankPopout {
                         width: (parent.width - Theme.spacingM) / 2
                         height: 64
                         radius: Theme.cornerRadius
-                        color: Theme.surfaceContainerHigh
+                        color: Theme.withAlpha(Theme.surfaceContainerHigh, Theme.popupTransparency)
                         border.width: 0
 
                         Column {
@@ -346,7 +349,7 @@ DankPopout {
                             spacing: Theme.spacingXS
 
                             StyledText {
-                                text: "Capacity"
+                                text: I18n.tr("Capacity")
                                 font.pixelSize: Theme.fontSizeSmall
                                 color: Theme.primary
                                 font.weight: Font.Medium
@@ -359,6 +362,210 @@ DankPopout {
                                 color: Theme.surfaceText
                                 font.weight: Font.Bold
                                 anchors.horizontalCenter: parent.horizontalCenter
+                            }
+                        }
+                    }
+                }
+
+                // Individual battery details for multiple batteries
+                Column {
+                    width: parent.width
+                    spacing: Theme.spacingS
+                    visible: !BatteryService.usePreferred && BatteryService.batteries.length > 1
+
+                    StyledText {
+                        text: I18n.tr("Individual Batteries")
+                        font.pixelSize: Theme.fontSizeSmall
+                        color: Theme.surfaceTextMedium
+                        font.weight: Font.Medium
+                    }
+
+                    Repeater {
+                        model: BatteryService.batteries
+
+                        delegate: StyledRect {
+                            required property var modelData
+                            required property int index
+
+                            width: parent.width
+                            height: batteryColumn.implicitHeight + Theme.spacingM * 2
+                            radius: Theme.cornerRadius
+                            color: Theme.withAlpha(Theme.surfaceContainer, Theme.popupTransparency)
+                            border.width: 0
+
+                            Column {
+                                id: batteryColumn
+                                anchors.fill: parent
+                                anchors.margins: Theme.spacingM
+                                spacing: Theme.spacingS
+
+                                // Top row: name and percentage
+                                Row {
+                                    width: parent.width
+                                    spacing: Theme.spacingM
+
+                                    Column {
+                                        spacing: Theme.spacingXS
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        width: parent.width - percentText.width - chargingIcon.width - Theme.spacingM * 2
+
+                                        StyledText {
+                                            text: modelData.model || `Battery ${index + 1}`
+                                            font.pixelSize: Theme.fontSizeSmall
+                                            color: Theme.surfaceText
+                                            font.weight: Font.Medium
+                                            elide: Text.ElideRight
+                                            width: parent.width
+                                        }
+
+                                        StyledText {
+                                            text: modelData.nativePath
+                                            font.pixelSize: Theme.fontSizeSmall
+                                            color: Theme.surfaceTextMedium
+                                            elide: Text.ElideMiddle
+                                            width: parent.width
+                                        }
+                                    }
+
+                                    Item {
+                                        width: 1
+                                        height: parent.height
+                                    }
+
+                                    StyledText {
+                                        id: percentText
+                                        text: `${Math.round(100 * modelData.percentage)}%`
+                                        font.pixelSize: Theme.fontSizeMedium
+                                        color: Theme.surfaceText
+                                        font.weight: Font.Bold
+                                        anchors.verticalCenter: parent.verticalCenter
+                                    }
+
+                                    DankIcon {
+                                        id: chargingIcon
+                                        name: modelData.state === UPowerDeviceState.Charging ? "bolt" : ""
+                                        size: Theme.iconSizeSmall
+                                        color: Theme.primary
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        visible: modelData.state === UPowerDeviceState.Charging
+                                    }
+                                }
+
+                                // Bottom row: Health, Capacity and Time
+                                Flow {
+                                    width: parent.width
+                                    spacing: Theme.spacingS
+
+                                    StyledRect {
+                                        width: (parent.width - Theme.spacingS * 2) / 3
+                                        height: 48
+                                        radius: Theme.cornerRadius
+                                        color: Theme.withAlpha(Theme.surfaceContainerHigh, Theme.popupTransparency)
+                                        border.width: 0
+
+                                        Column {
+                                            anchors.centerIn: parent
+                                            spacing: 2
+
+                                            StyledText {
+                                                text: I18n.tr("Health")
+                                                font.pixelSize: Theme.fontSizeSmall
+                                                color: Theme.surfaceTextMedium
+                                                font.weight: Font.Medium
+                                                anchors.horizontalCenter: parent.horizontalCenter
+                                            }
+
+                                            StyledText {
+                                                text: {
+                                                    if (!modelData.healthSupported || modelData.healthPercentage <= 0)
+                                                        return "N/A"
+                                                    return `${Math.round(modelData.healthPercentage)}%`
+                                                }
+                                                font.pixelSize: Theme.fontSizeSmall
+                                                color: {
+                                                    if (!modelData.healthSupported || modelData.healthPercentage <= 0)
+                                                        return Theme.surfaceText
+                                                    return modelData.healthPercentage < 80 ? Theme.error : Theme.surfaceText
+                                                }
+                                                font.weight: Font.Bold
+                                                anchors.horizontalCenter: parent.horizontalCenter
+                                            }
+                                        }
+                                    }
+
+                                    StyledRect {
+                                        width: (parent.width - Theme.spacingS * 2) / 3
+                                        height: 48
+                                        radius: Theme.cornerRadius
+                                        color: Theme.withAlpha(Theme.surfaceContainerHigh, Theme.popupTransparency)
+                                        border.width: 0
+
+                                        Column {
+                                            anchors.centerIn: parent
+                                            spacing: 2
+
+                                            StyledText {
+                                                text: I18n.tr("Capacity")
+                                                font.pixelSize: Theme.fontSizeSmall
+                                                color: Theme.surfaceTextMedium
+                                                font.weight: Font.Medium
+                                                anchors.horizontalCenter: parent.horizontalCenter
+                                            }
+
+                                            StyledText {
+                                                text: modelData.energyCapacity > 0 ? `${modelData.energyCapacity.toFixed(1)}` : "N/A"
+                                                font.pixelSize: Theme.fontSizeSmall
+                                                color: Theme.surfaceText
+                                                font.weight: Font.Bold
+                                                anchors.horizontalCenter: parent.horizontalCenter
+                                            }
+                                        }
+                                    }
+
+                                    StyledRect {
+                                        width: (parent.width - Theme.spacingS * 2) / 3
+                                        height: 48
+                                        radius: Theme.cornerRadius
+                                        color: Theme.withAlpha(Theme.surfaceContainerHigh, Theme.popupTransparency)
+                                        border.width: 0
+
+                                        Column {
+                                            anchors.centerIn: parent
+                                            spacing: 2
+
+                                            StyledText {
+                                                text: modelData.state === UPowerDeviceState.Charging
+                                                                          ? I18n.tr("To Full")
+                                                                          : modelData.state === UPowerDeviceState.Discharging
+                                                                              ? I18n.tr("Left") : ""
+                                                font.pixelSize: Theme.fontSizeSmall
+                                                color: Theme.surfaceTextMedium
+                                                font.weight: Font.Medium
+                                                anchors.horizontalCenter: parent.horizontalCenter
+                                            }
+
+                                            StyledText {
+                                                text: {
+                                                      const time = modelData.state === UPowerDeviceState.Charging
+                                                                   ? modelData.timeToFull
+                                                                   : modelData.state === UPowerDeviceState.Discharging && BatteryService.changeRate > 0
+                                                                       ? (3600 * modelData.energy) / BatteryService.changeRate : 0
+
+                                                    if (!time || time <= 0 || time > 86400)
+                                                        return "N/A"
+
+                                                    const hours = Math.floor(time / 3600)
+                                                    const minutes = Math.floor((time % 3600) / 60)
+                                                    return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`
+                                                }
+                                                font.pixelSize: Theme.fontSizeSmall
+                                                color: Theme.surfaceText
+                                                font.weight: Font.Bold
+                                                anchors.horizontalCenter: parent.horizontalCenter
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -415,7 +622,7 @@ DankPopout {
                                 width: parent.width - Theme.iconSize - Theme.spacingM
 
                                 StyledText {
-                                    text: "Power Profile Degradation"
+                                    text: I18n.tr("Power Profile Degradation")
                                     font.pixelSize: Theme.fontSizeLarge
                                     color: Theme.error
                                     font.weight: Font.Medium

@@ -225,6 +225,14 @@ Singleton {
                 }
             }
 
+            if (SettingsData.soundsEnabled && SettingsData.soundNewNotification) {
+                if (notif.urgency === NotificationUrgency.Critical) {
+                    AudioService.playCriticalNotificationSound()
+                } else {
+                    AudioService.playNormalNotificationSound()
+                }
+            }
+
             const shouldShowPopup = !root.popupsDisabled && !SessionData.doNotDisturb
             const isTransient = notif.transient
             const wrapper = notifComponent.createObject(root, {

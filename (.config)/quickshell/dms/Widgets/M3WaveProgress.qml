@@ -31,7 +31,6 @@ Item {
         antialiasing: true
         preferredRendererType: Shape.CurveRenderer
         layer.enabled: true
-        layer.samples: 0
 
         ShapePath {
             strokeColor: root.trackColor

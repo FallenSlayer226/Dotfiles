@@ -20,6 +20,8 @@ import "./utils/state.js" as StateUtils
 DankPopout {
     id: root
 
+    layerNamespace: "dms:control-center"
+
     property string expandedSection: ""
     property var triggerScreen: null
     property bool editMode: false
@@ -46,7 +48,7 @@ DankPopout {
         }
     }
 
-    readonly property color _containerBg: Theme.surfaceContainerHigh
+    readonly property color _containerBg: Theme.withAlpha(Theme.surfaceContainerHigh, Theme.popupTransparency)
 
     function setTriggerPosition(x, y, width, section, screen) {
         StateUtils.setTriggerPosition(root, x, y, width, section, screen)
@@ -73,17 +75,21 @@ DankPopout {
     onShouldBeVisibleChanged: {
         if (shouldBeVisible) {
             Qt.callLater(() => {
-                NetworkService.autoRefreshEnabled = NetworkService.wifiEnabled
-                if (UserInfoService)
-                    UserInfoService.getUptime()
-            })
+                             if (NetworkService.activeService) {
+                                 NetworkService.activeService.autoRefreshEnabled = NetworkService.wifiEnabled
+                             }
+                             if (UserInfoService)
+                             UserInfoService.getUptime()
+                         })
         } else {
             Qt.callLater(() => {
-                NetworkService.autoRefreshEnabled = false
-                if (BluetoothService.adapter && BluetoothService.adapter.discovering)
-                    BluetoothService.adapter.discovering = false
-                editMode = false
-            })
+                             if (NetworkService.activeService) {
+                                 NetworkService.activeService.autoRefreshEnabled = false
+                             }
+                             if (BluetoothService.adapter && BluetoothService.adapter.discovering)
+                             BluetoothService.adapter.discovering = false
+                             editMode = false
+                         })
         }
     }
 
@@ -104,8 +110,7 @@ DankPopout {
                 return Qt.rgba(surface.r, surface.g, surface.b, transparency)
             }
             radius: Theme.cornerRadius
-            border.color: Qt.rgba(Theme.outline.r, Theme.outline.g,
-                                  Theme.outline.b, 0.08)
+            border.color: Qt.rgba(Theme.outline.r, Theme.outline.g, Theme.outline.b, 0.08)
             border.width: 0
             antialiasing: true
             smooth: true
@@ -136,6 +141,9 @@ DankPopout {
                         root.close()
                         root.lockRequested()
                     }
+                    onSettingsButtonClicked: {
+                        root.close()
+                    }
                 }
 
                 DragDropGrid {
@@ -148,18 +156,23 @@ DankPopout {
                     model: widgetModel
                     bluetoothCodecSelector: bluetoothCodecSelector
                     colorPickerModal: root.colorPickerModal
+                    screenName: root.triggerScreen?.name || ""
+                    parentScreen: root.triggerScreen
                     onExpandClicked: (widgetData, globalIndex) => {
-                        root.expandedWidgetIndex = globalIndex
-                        root.expandedWidgetData = widgetData
-                        if (widgetData.id === "diskUsage") {
-                            root.toggleSection("diskUsage_" + (widgetData.instanceId || "default"))
-                        } else {
-                            root.toggleSection(widgetData.id)
-                        }
-                    }
-                    onRemoveWidget: (index) => widgetModel.removeWidget(index)
+                                         root.expandedWidgetIndex = globalIndex
+                                         root.expandedWidgetData = widgetData
+                                         if (widgetData.id === "diskUsage") {
+                                             root.toggleSection("diskUsage_" + (widgetData.instanceId || "default"))
+                                         } else if (widgetData.id === "brightnessSlider") {
+                                             root.toggleSection("brightnessSlider_" + (widgetData.instanceId || "default"))
+                                         } else {
+                                             root.toggleSection(widgetData.id)
+                                         }
+                                     }
+                    onRemoveWidget: index => widgetModel.removeWidget(index)
                     onMoveWidget: (fromIndex, toIndex) => widgetModel.moveWidget(fromIndex, toIndex)
-                    onToggleWidgetSize: (index) => widgetModel.toggleWidgetSize(index)
+                    onToggleWidgetSize: index => widgetModel.toggleWidgetSize(index)
+                    onCollapseRequested: root.collapseAll()
                 }
 
                 EditControls {
@@ -167,10 +180,13 @@ DankPopout {
                     visible: editMode
                     popoutContent: controlContent
                     availableWidgets: {
+                        if (!editMode)
+                            return []
                         const existingIds = (SettingsData.controlCenterWidgets || []).map(w => w.id)
-                        return widgetModel.baseWidgetDefinitions.filter(w => w.allowMultiple || !existingIds.includes(w.id))
+                        const allWidgets = widgetModel.baseWidgetDefinitions.concat(widgetModel.getPluginWidgets())
+                        return allWidgets.filter(w => w.allowMultiple || !existingIds.includes(w.id))
                     }
-                    onAddWidget: (widgetId) => widgetModel.addWidget(widgetId)
+                    onAddWidget: widgetId => widgetModel.addWidget(widgetId)
                     onResetToDefault: () => widgetModel.resetToDefault()
                     onClearAll: () => widgetModel.clearAll()
                 }
@@ -193,10 +209,10 @@ DankPopout {
         id: bluetoothDetailComponent
         BluetoothDetail {
             id: bluetoothDetail
-            onShowCodecSelector: function(device) {
+            onShowCodecSelector: function (device) {
                 if (contentLoader.item && contentLoader.item.bluetoothCodecSelector) {
                     contentLoader.item.bluetoothCodecSelector.show(device)
-                    contentLoader.item.bluetoothCodecSelector.codecSelected.connect(function(deviceAddress, codecName) {
+                    contentLoader.item.bluetoothCodecSelector.codecSelected.connect(function (deviceAddress, codecName) {
                         bluetoothDetail.updateDeviceCodecDisplay(deviceAddress, codecName)
                     })
                 }

@@ -76,7 +76,7 @@ Column {
         }
 
         StyledText {
-            text: "No items added yet"
+            text: I18n.tr("No items added yet")
             font.pixelSize: Theme.fontSizeSmall
             color: Theme.surfaceVariantText
             visible: root.items.length === 0
@@ -89,7 +89,7 @@ Column {
             width: parent.width
             height: 40
             radius: Theme.cornerRadius
-            color: Theme.surfaceContainerHigh
+            color: Theme.withAlpha(Theme.surfaceContainerHigh, Theme.popupTransparency)
             border.width: 0
 
             StyledText {
@@ -111,7 +111,7 @@ Column {
 
                 StyledText {
                     anchors.centerIn: parent
-                    text: "Remove"
+                    text: I18n.tr("Remove")
                     color: Theme.errorText
                     font.pixelSize: Theme.fontSizeSmall
                     font.weight: Font.Medium

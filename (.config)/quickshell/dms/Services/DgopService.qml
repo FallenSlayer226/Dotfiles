@@ -682,7 +682,7 @@ Singleton {
                         // Prefer PRETTY_NAME, fallback to NAME
                         const distroName = prettyName || name || "Linux"
                         distribution = distroName
-                        console.log("Detected distribution:", distroName)
+                        console.info("Detected distribution:", distroName)
                     } catch (e) {
                         console.warn("Failed to parse /etc/os-release:", e)
                         distribution = "Linux"

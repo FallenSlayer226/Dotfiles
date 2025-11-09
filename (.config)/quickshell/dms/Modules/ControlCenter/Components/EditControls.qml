@@ -55,7 +55,7 @@ Row {
                 }
 
                 Typography {
-                    text: "Add Widget"
+                    text: I18n.tr("Add Widget")
                     style: Typography.Style.Subtitle
                     color: Theme.surfaceText
                     anchors.verticalCenter: parent.verticalCenter
@@ -69,13 +69,14 @@ Row {
                 anchors.right: parent.right
                 anchors.bottom: parent.bottom
                 spacing: Theme.spacingS
+                clip: true
                 model: root.availableWidgets
 
                 delegate: Rectangle {
                     width: 400 - Theme.spacingL * 2
                     height: 50
                     radius: Theme.cornerRadius
-                    color: widgetMouseArea.containsMouse ? Theme.primaryHover : Theme.surfaceContainerHigh
+                    color: widgetMouseArea.containsMouse ? Theme.primaryHover : Theme.withAlpha(Theme.surfaceContainerHigh, Theme.popupTransparency)
                     border.color: Qt.rgba(Theme.outline.r, Theme.outline.g, Theme.outline.b, 0.2)
                     border.width: 0
 
@@ -155,7 +156,7 @@ Row {
             }
 
             Typography {
-                text: "Add Widget"
+                text: I18n.tr("Add Widget")
                 style: Typography.Style.Button
                 color: Theme.primary
                 anchors.verticalCenter: parent.verticalCenter
@@ -189,7 +190,7 @@ Row {
             }
 
             Typography {
-                text: "Defaults"
+                text: I18n.tr("Defaults")
                 style: Typography.Style.Button
                 color: Theme.warning
                 anchors.verticalCenter: parent.verticalCenter
@@ -223,7 +224,7 @@ Row {
             }
 
             Typography {
-                text: "Reset"
+                text: I18n.tr("Reset")
                 style: Typography.Style.Button
                 color: Theme.error
                 anchors.verticalCenter: parent.verticalCenter

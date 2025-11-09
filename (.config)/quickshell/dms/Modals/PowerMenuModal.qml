@@ -7,6 +7,8 @@ import qs.Widgets
 DankModal {
     id: root
 
+    layerNamespace: "dms:power-menu"
+
     property int selectedIndex: 0
     property int optionCount: SessionService.hibernateSupported ? 5 : 4
     property rect parentBounds: Qt.rect(0, 0, 0, 0)
@@ -32,24 +34,24 @@ DankModal {
         close();
         const actions = {
             "logout": {
-                "title": "Log Out",
-                "message": "Are you sure you want to log out?"
+                "title": I18n.tr("Log Out"),
+                "message": I18n.tr("Are you sure you want to log out?")
             },
             "suspend": {
-                "title": "Suspend",
-                "message": "Are you sure you want to suspend the system?"
+                "title": I18n.tr("Suspend"),
+                "message": I18n.tr("Are you sure you want to suspend the system?")
             },
             "hibernate": {
-                "title": "Hibernate",
-                "message": "Are you sure you want to hibernate the system?"
+                "title": I18n.tr("Hibernate"),
+                "message": I18n.tr("Are you sure you want to hibernate the system?")
             },
             "reboot": {
-                "title": "Reboot",
-                "message": "Are you sure you want to reboot the system?"
+                "title": I18n.tr("Reboot"),
+                "message": I18n.tr("Are you sure you want to reboot the system?")
             },
             "poweroff": {
-                "title": "Power Off",
-                "message": "Are you sure you want to power off the system?"
+                "title": I18n.tr("Power Off"),
+                "message": I18n.tr("Are you sure you want to power off the system?")
             }
         }
         const selected = actions[action]
@@ -78,7 +80,7 @@ DankModal {
     }
     onOpened: () => {
         selectedIndex = 0;
-        modalFocusScope.forceActiveFocus();
+        Qt.callLater(() => modalFocusScope.forceActiveFocus());
     }
     modalFocusScope.Keys.onPressed: (event) => {
         switch (event.key) {
@@ -144,7 +146,7 @@ DankModal {
                     width: parent.width
 
                     StyledText {
-                        text: "Power Options"
+                        text: I18n.tr("Power Options")
                         font.pixelSize: Theme.fontSizeLarge
                         color: Theme.surfaceText
                         font.weight: Font.Medium
@@ -201,7 +203,7 @@ DankModal {
                             }
 
                             StyledText {
-                                text: "Log Out"
+                                text: I18n.tr("Log Out")
                                 font.pixelSize: Theme.fontSizeMedium
                                 color: Theme.surfaceText
                                 font.weight: Font.Medium
@@ -254,7 +256,7 @@ DankModal {
                             }
 
                             StyledText {
-                                text: "Suspend"
+                                text: I18n.tr("Suspend")
                                 font.pixelSize: Theme.fontSizeMedium
                                 color: Theme.surfaceText
                                 font.weight: Font.Medium
@@ -308,7 +310,7 @@ DankModal {
                             }
 
                             StyledText {
-                                text: "Hibernate"
+                                text: I18n.tr("Hibernate")
                                 font.pixelSize: Theme.fontSizeMedium
                                 color: Theme.surfaceText
                                 font.weight: Font.Medium
@@ -362,7 +364,7 @@ DankModal {
                             }
 
                             StyledText {
-                                text: "Reboot"
+                                text: I18n.tr("Reboot")
                                 font.pixelSize: Theme.fontSizeMedium
                                 color: rebootArea.containsMouse ? Theme.warning : Theme.surfaceText
                                 font.weight: Font.Medium
@@ -416,7 +418,7 @@ DankModal {
                             }
 
                             StyledText {
-                                text: "Power Off"
+                                text: I18n.tr("Power Off")
                                 font.pixelSize: Theme.fontSizeMedium
                                 color: powerOffArea.containsMouse ? Theme.error : Theme.surfaceText
                                 font.weight: Font.Medium

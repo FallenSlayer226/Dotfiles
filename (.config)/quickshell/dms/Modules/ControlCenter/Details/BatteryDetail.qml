@@ -9,7 +9,7 @@ import qs.Widgets
 Rectangle {
     implicitHeight: contentColumn.implicitHeight + Theme.spacingL * 2
     radius: Theme.cornerRadius
-    color: Theme.surfaceContainerHigh
+    color: Theme.withAlpha(Theme.surfaceContainerHigh, Theme.popupTransparency)
     border.color: Qt.rgba(Theme.outline.r, Theme.outline.g, Theme.outline.b, 0.08)
     border.width: 0
 
@@ -125,7 +125,7 @@ Rectangle {
                 width: (parent.width - Theme.spacingM) / 2
                 height: 64
                 radius: Theme.cornerRadius
-                color: Theme.surfaceContainerHighest
+                color: Theme.withAlpha(Theme.surfaceContainerHighest, Theme.popupTransparency)
                 border.width: 0
 
                 Column {
@@ -133,7 +133,7 @@ Rectangle {
                     spacing: Theme.spacingXS
 
                     StyledText {
-                        text: "Health"
+                        text: I18n.tr("Health")
                         font.pixelSize: Theme.fontSizeSmall
                         color: Theme.primary
                         font.weight: Font.Medium
@@ -160,7 +160,7 @@ Rectangle {
                 width: (parent.width - Theme.spacingM) / 2
                 height: 64
                 radius: Theme.cornerRadius
-                color: Theme.surfaceContainerHighest
+                color: Theme.withAlpha(Theme.surfaceContainerHighest, Theme.popupTransparency)
                 border.width: 0
 
                 Column {
@@ -168,7 +168,7 @@ Rectangle {
                     spacing: Theme.spacingXS
 
                     StyledText {
-                        text: "Capacity"
+                        text: I18n.tr("Capacity")
                         font.pixelSize: Theme.fontSizeSmall
                         color: Theme.primary
                         font.weight: Font.Medium
@@ -237,7 +237,7 @@ Rectangle {
                         width: parent.width - Theme.iconSize - Theme.spacingM
 
                         StyledText {
-                            text: "Power Profile Degradation"
+                            text: I18n.tr("Power Profile Degradation")
                             font.pixelSize: Theme.fontSizeLarge
                             color: Theme.error
                             font.weight: Font.Medium

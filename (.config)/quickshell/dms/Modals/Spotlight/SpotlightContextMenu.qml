@@ -1,65 +1,73 @@
 import QtQuick
+import QtQuick.Controls
+import Quickshell
+import Quickshell.Widgets
 import qs.Common
 import qs.Services
 import qs.Widgets
 
-Rectangle {
+Popup {
     id: contextMenu
 
     property var currentApp: null
-    property bool menuVisible: false
     property var appLauncher: null
     property var parentHandler: null
+    readonly property var desktopEntry: (currentApp && !currentApp.isPlugin && appLauncher && appLauncher._uniqueApps && currentApp.appIndex >= 0 && currentApp.appIndex < appLauncher._uniqueApps.length) ? appLauncher._uniqueApps[currentApp.appIndex] : null
 
     function show(x, y, app) {
         currentApp = app
-        const menuWidth = 180
-        const menuHeight = menuColumn.implicitHeight + Theme.spacingS * 2
-        let finalX = x + 8
-        let finalY = y + 8
-        if (parentHandler) {
-            if (finalX + menuWidth > parentHandler.width)
-                finalX = x - menuWidth - 8
-
-            if (finalY + menuHeight > parentHandler.height)
-                finalY = y - menuHeight - 8
-
-            finalX = Math.max(8, Math.min(finalX, parentHandler.width - menuWidth - 8))
-            finalY = Math.max(8, Math.min(finalY, parentHandler.height - menuHeight - 8))
-        }
-        contextMenu.x = finalX
-        contextMenu.y = finalY
-        contextMenu.visible = true
-        contextMenu.menuVisible = true
+        contextMenu.x = x + 4
+        contextMenu.y = y + 4
+        contextMenu.open()
     }
 
-    function close() {
-        contextMenu.menuVisible = false
-        Qt.callLater(() => {
-                         contextMenu.visible = false
-                     })
+    function hide() {
+        contextMenu.close()
     }
 
-    visible: false
-    width: 180
+    width: Math.max(180, menuColumn.implicitWidth + Theme.spacingS * 2)
     height: menuColumn.implicitHeight + Theme.spacingS * 2
-    radius: Theme.cornerRadius
-    color: Theme.popupBackground()
-    border.color: Qt.rgba(Theme.outline.r, Theme.outline.g, Theme.outline.b, 0.08)
-    border.width: 1
-    z: 1000
-    opacity: menuVisible ? 1 : 0
-    scale: menuVisible ? 1 : 0.85
+    padding: 0
+    closePolicy: Popup.CloseOnPressOutside
+    modal: false
+    dim: false
 
-    Rectangle {
-        anchors.fill: parent
-        anchors.topMargin: 4
-        anchors.leftMargin: 2
-        anchors.rightMargin: -2
-        anchors.bottomMargin: -4
-        radius: parent.radius
-        color: Qt.rgba(0, 0, 0, 0.15)
-        z: parent.z - 1
+    background: Rectangle {
+        radius: Theme.cornerRadius
+        color: Theme.withAlpha(Theme.surfaceContainer, Theme.popupTransparency)
+        border.color: Qt.rgba(Theme.outline.r, Theme.outline.g, Theme.outline.b, 0.08)
+        border.width: 1
+
+        Rectangle {
+            anchors.fill: parent
+            anchors.topMargin: 4
+            anchors.leftMargin: 2
+            anchors.rightMargin: -2
+            anchors.bottomMargin: -4
+            radius: parent.radius
+            color: Qt.rgba(0, 0, 0, 0.15)
+            z: -1
+        }
+    }
+
+    enter: Transition {
+        NumberAnimation {
+            property: "opacity"
+            from: 0
+            to: 1
+            duration: Theme.shortDuration
+            easing.type: Theme.emphasizedEasing
+        }
+    }
+
+    exit: Transition {
+        NumberAnimation {
+            property: "opacity"
+            from: 1
+            to: 0
+            duration: Theme.shortDuration
+            easing.type: Theme.emphasizedEasing
+        }
     }
 
     Column {
@@ -76,6 +84,7 @@ Rectangle {
             color: pinMouseArea.containsMouse ? Qt.rgba(Theme.primary.r, Theme.primary.g, Theme.primary.b, 0.12) : "transparent"
 
             Row {
+                id: pinRow
                 anchors.left: parent.left
                 anchors.leftMargin: Theme.spacingS
                 anchors.verticalCenter: parent.verticalCenter
@@ -83,10 +92,10 @@ Rectangle {
 
                 DankIcon {
                     name: {
-                        if (!contextMenu.currentApp || !contextMenu.currentApp.desktopEntry)
+                        if (!desktopEntry)
                             return "push_pin"
 
-                        const appId = contextMenu.currentApp.desktopEntry.id || contextMenu.currentApp.desktopEntry.execString || ""
+                        const appId = desktopEntry.id || desktopEntry.execString || ""
                         return SessionData.isPinnedApp(appId) ? "keep_off" : "push_pin"
                     }
                     size: Theme.iconSize - 2
@@ -97,11 +106,11 @@ Rectangle {
 
                 StyledText {
                     text: {
-                        if (!contextMenu.currentApp || !contextMenu.currentApp.desktopEntry)
-                            return "Pin to Dock"
+                        if (!desktopEntry)
+                            return I18n.tr("Pin to Dock")
 
-                        const appId = contextMenu.currentApp.desktopEntry.id || contextMenu.currentApp.desktopEntry.execString || ""
-                        return SessionData.isPinnedApp(appId) ? "Unpin from Dock" : "Pin to Dock"
+                        const appId = desktopEntry.id || desktopEntry.execString || ""
+                        return SessionData.isPinnedApp(appId) ? I18n.tr("Unpin from Dock") : I18n.tr("Pin to Dock")
                     }
                     font.pixelSize: Theme.fontSizeSmall
                     color: Theme.surfaceText
@@ -117,20 +126,93 @@ Rectangle {
                 hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
                 onClicked: () => {
-                               if (!contextMenu.currentApp || !contextMenu.currentApp.desktopEntry)
+                               if (!desktopEntry)
                                return
 
-                               const appId = contextMenu.currentApp.desktopEntry.id || contextMenu.currentApp.desktopEntry.execString || ""
+                               const appId = desktopEntry.id || desktopEntry.execString || ""
                                if (SessionData.isPinnedApp(appId))
                                SessionData.removePinnedApp(appId)
                                else
                                SessionData.addPinnedApp(appId)
-                               contextMenu.close()
+                               contextMenu.hide()
                            }
             }
         }
 
         Rectangle {
+            width: parent.width - Theme.spacingS * 2
+            height: 5
+            anchors.horizontalCenter: parent.horizontalCenter
+            color: "transparent"
+
+            Rectangle {
+                anchors.centerIn: parent
+                width: parent.width
+                height: 1
+                color: Qt.rgba(Theme.outline.r, Theme.outline.g, Theme.outline.b, 0.2)
+            }
+        }
+
+        Repeater {
+            model: desktopEntry && desktopEntry.actions ? desktopEntry.actions : []
+
+            Rectangle {
+                width: parent.width
+                height: 32
+                radius: Theme.cornerRadius
+                color: actionMouseArea.containsMouse ? Qt.rgba(Theme.primary.r, Theme.primary.g, Theme.primary.b, 0.12) : "transparent"
+
+                Row {
+                    id: actionRow
+                    anchors.left: parent.left
+                    anchors.leftMargin: Theme.spacingS
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: Theme.spacingS
+
+                    Item {
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: Theme.iconSize - 2
+                        height: Theme.iconSize - 2
+                        visible: modelData.icon && modelData.icon !== ""
+
+                        IconImage {
+                            anchors.fill: parent
+                            source: modelData.icon ? Quickshell.iconPath(modelData.icon, true) : ""
+                            smooth: true
+                            asynchronous: true
+                            visible: status === Image.Ready
+                        }
+                    }
+
+                    StyledText {
+                        text: modelData.name || ""
+                        font.pixelSize: Theme.fontSizeSmall
+                        color: Theme.surfaceText
+                        font.weight: Font.Normal
+                        anchors.verticalCenter: parent.verticalCenter
+                    }
+                }
+
+                MouseArea {
+                    id: actionMouseArea
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: {
+                        if (modelData && desktopEntry) {
+                            SessionService.launchDesktopAction(desktopEntry, modelData)
+                            if (appLauncher && contextMenu.currentApp) {
+                                appLauncher.appLaunched(contextMenu.currentApp)
+                            }
+                        }
+                        contextMenu.hide()
+                    }
+                }
+            }
+        }
+
+        Rectangle {
+            visible: desktopEntry && desktopEntry.actions && desktopEntry.actions.length > 0
             width: parent.width - Theme.spacingS * 2
             height: 5
             anchors.horizontalCenter: parent.horizontalCenter
@@ -151,6 +233,7 @@ Rectangle {
             color: launchMouseArea.containsMouse ? Qt.rgba(Theme.primary.r, Theme.primary.g, Theme.primary.b, 0.12) : "transparent"
 
             Row {
+                id: launchRow
                 anchors.left: parent.left
                 anchors.leftMargin: Theme.spacingS
                 anchors.verticalCenter: parent.verticalCenter
@@ -165,7 +248,7 @@ Rectangle {
                 }
 
                 StyledText {
-                    text: "Launch"
+                    text: I18n.tr("Launch")
                     font.pixelSize: Theme.fontSizeSmall
                     color: Theme.surfaceText
                     font.weight: Font.Normal
@@ -183,23 +266,73 @@ Rectangle {
                                if (contextMenu.currentApp && appLauncher)
                                appLauncher.launchApp(contextMenu.currentApp)
 
-                               contextMenu.close()
+                               contextMenu.hide()
                            }
             }
         }
-    }
 
-    Behavior on opacity {
-        NumberAnimation {
-            duration: Theme.mediumDuration
-            easing.type: Theme.emphasizedEasing
+        Rectangle {
+            visible: SessionService.hasPrimeRun
+            width: parent.width - Theme.spacingS * 2
+            height: 5
+            anchors.horizontalCenter: parent.horizontalCenter
+            color: "transparent"
+
+            Rectangle {
+                anchors.centerIn: parent
+                width: parent.width
+                height: 1
+                color: Qt.rgba(Theme.outline.r, Theme.outline.g, Theme.outline.b, 0.2)
+            }
         }
-    }
 
-    Behavior on scale {
-        NumberAnimation {
-            duration: Theme.mediumDuration
-            easing.type: Theme.emphasizedEasing
+        Rectangle {
+            visible: SessionService.hasPrimeRun
+            width: parent.width
+            height: 32
+            radius: Theme.cornerRadius
+            color: primeRunMouseArea.containsMouse ? Qt.rgba(Theme.primary.r, Theme.primary.g, Theme.primary.b, 0.12) : "transparent"
+
+            Row {
+                id: primeRunRow
+                anchors.left: parent.left
+                anchors.leftMargin: Theme.spacingS
+                anchors.verticalCenter: parent.verticalCenter
+                spacing: Theme.spacingS
+
+                DankIcon {
+                    name: "memory"
+                    size: Theme.iconSize - 2
+                    color: Theme.surfaceText
+                    opacity: 0.7
+                    anchors.verticalCenter: parent.verticalCenter
+                }
+
+                StyledText {
+                    text: I18n.tr("Launch on dGPU")
+                    font.pixelSize: Theme.fontSizeSmall
+                    color: Theme.surfaceText
+                    font.weight: Font.Normal
+                    anchors.verticalCenter: parent.verticalCenter
+                }
+            }
+
+            MouseArea {
+                id: primeRunMouseArea
+
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: () => {
+                               if (desktopEntry) {
+                                   SessionService.launchDesktopEntry(desktopEntry, true)
+                                   if (appLauncher && contextMenu.currentApp) {
+                                       appLauncher.appLaunched(contextMenu.currentApp)
+                                   }
+                               }
+                               contextMenu.hide()
+                           }
+            }
         }
     }
 }

@@ -16,9 +16,6 @@ Singleton {
     property var monitorTimers: ({})
     property var monitorLastTimeChecks: ({})
     property var monitorProcesses: ({})
-    Component.onCompleted: {
-        updateCyclingState()
-    }
 
     Component {
         id: monitorTimerComponent
@@ -126,7 +123,7 @@ Singleton {
             var settings = SessionData.getMonitorCyclingSettings(screenName)
             var wallpaper = SessionData.getMonitorWallpaper(screenName)
 
-            if (settings.enabled && wallpaper && !wallpaper.startsWith("#") && !wallpaper.startsWith("we:")) {
+            if (settings.enabled && wallpaper && !wallpaper.startsWith("#")) {
                 startMonitorCycling(screenName, settings)
             } else {
                 stopMonitorCycling(screenName)
@@ -302,7 +299,7 @@ Singleton {
 
     function cyclePrevForMonitor(screenName) {
         if (!screenName) return
-        
+
         var currentWallpaper = SessionData.getMonitorWallpaper(screenName)
         if (currentWallpaper) {
             cycleToPrevWallpaper(screenName, currentWallpaper)
@@ -333,7 +330,7 @@ Singleton {
             var settings = SessionData.getMonitorCyclingSettings(screenName)
             var wallpaper = SessionData.getMonitorWallpaper(screenName)
 
-            if (settings.enabled && settings.mode === "time" && wallpaper && !wallpaper.startsWith("#") && !wallpaper.startsWith("we:")) {
+            if (settings.enabled && settings.mode === "time" && wallpaper && !wallpaper.startsWith("#")) {
                 var lastCheck = monitorLastTimeChecks[screenName] || ""
 
                 if (currentTime === settings.time && currentTime !== lastCheck) {
@@ -370,10 +367,10 @@ Singleton {
 
     Process {
         id: cyclingProcess
-        
+
         property string targetScreenName: ""
         property string currentWallpaper: ""
-        
+
         running: false
 
         stdout: StdioCollector {
@@ -404,10 +401,10 @@ Singleton {
 
     Process {
         id: prevCyclingProcess
-        
+
         property string targetScreenName: ""
         property string currentWallpaper: ""
-        
+
         running: false
 
         stdout: StdioCollector {

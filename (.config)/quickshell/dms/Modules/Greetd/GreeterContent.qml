@@ -7,15 +7,13 @@ import Quickshell
 import Quickshell.Io
 import Quickshell.Services.Greetd
 import Quickshell.Services.Pam
-import Quickshell.Services.Mpris
 import qs.Common
 import qs.Services
 import qs.Widgets
+import qs.Modules.Lock
 
 Item {
     id: root
-
-    required property var sessionLock
 
     readonly property string xdgDataDirs: Quickshell.env("XDG_DATA_DIRS")
     property string screenName: ""
@@ -33,28 +31,8 @@ Item {
 
     signal launchRequested
 
-    property bool powerDialogVisible: false
-    property string powerDialogTitle: ""
-    property string powerDialogMessage: ""
-    property string powerDialogConfirmText: ""
-    property color powerDialogConfirmColor: Theme.primary
-    property var powerDialogOnConfirm: function () {}
-
     function pickRandomFact() {
         randomFact = Facts.getRandomFact()
-    }
-
-    function showPowerDialog(title, message, confirmText, confirmColor, onConfirm) {
-        powerDialogTitle = title
-        powerDialogMessage = message
-        powerDialogConfirmText = confirmText
-        powerDialogConfirmColor = confirmColor
-        powerDialogOnConfirm = onConfirm
-        powerDialogVisible = true
-    }
-
-    function hidePowerDialog() {
-        powerDialogVisible = false
     }
 
     Component.onCompleted: {
@@ -136,21 +114,6 @@ Item {
         onTriggered: updateHyprlandLayout()
     }
 
-    // ! This was for development and testing, just leaving so people can see how I did it.
-    // Timer {
-    //     id: autoUnlockTimer
-    //     interval: 10000
-    //     running: true
-    //     onTriggered: {
-    //         root.sessionLock.locked = false
-    //         GreeterState.unlocking = true
-    //         const sessionCmd = GreeterState.selectedSession || GreeterState.sessionExecs[GreeterState.currentSessionIndex]
-    //         if (sessionCmd) {
-    //             GreetdMemory.setLastSessionId(sessionCmd.split(" ")[0])
-    //             Greetd.launch(sessionCmd.split(" "), [], true)
-    //         }
-    //     }
-    // }
 
     Connections {
         target: GreetdMemory
@@ -184,15 +147,9 @@ Item {
         anchors.fill: parent
         source: {
             var currentWallpaper = SessionData.getMonitorWallpaper(screenName)
-            if (screenName && currentWallpaper && currentWallpaper.startsWith("we:")) {
-                const cacheHome = StandardPaths.writableLocation(StandardPaths.CacheLocation).toString()
-                const baseDir = Paths.strip(cacheHome)
-                const screenshotPath = baseDir + "/dankshell/we_screenshots" + "/" + currentWallpaper.substring(3) + ".jpg"
-                return screenshotPath
-            }
             return (currentWallpaper && !currentWallpaper.startsWith("#")) ? currentWallpaper : ""
         }
-        fillMode: Image.PreserveAspectCrop
+        fillMode: Theme.getFillMode(GreetdSettings.wallpaperFillMode)
         smooth: true
         asynchronous: false
         cache: true
@@ -223,7 +180,7 @@ Item {
 
     SystemClock {
         id: systemClock
-        precision: SystemClock.Minutes
+        precision: SystemClock.Seconds
     }
 
     Rectangle {
@@ -233,38 +190,134 @@ Item {
         Item {
             anchors.centerIn: parent
             anchors.verticalCenterOffset: -100
-            width: 400
+            width: parent.width
             height: 140
 
-            StyledText {
+            Row {
                 id: clockText
-
                 anchors.horizontalCenter: parent.horizontalCenter
                 anchors.top: parent.top
-                text: {
-                    const format = GreetdSettings.use24HourClock ? "HH:mm" : "h:mm AP"
+                spacing: 0
+
+                property string fullTimeStr: {
+                    const format = GreetdSettings.use24HourClock
+                        ? (GreetdSettings.showSeconds ? "HH:mm:ss" : "HH:mm")
+                        : (GreetdSettings.showSeconds ? "h:mm:ss AP" : "h:mm AP")
                     return systemClock.date.toLocaleTimeString(Qt.locale(), format)
                 }
-                font.pixelSize: 120
-                font.weight: Font.Light
-                color: "white"
-                lineHeight: 0.8
-            }
-
-            StyledText {
-                anchors.horizontalCenter: parent.horizontalCenter
-                anchors.top: clockText.bottom
-                anchors.topMargin: -20
-                text: {
-                    if (GreetdSettings.lockDateFormat && GreetdSettings.lockDateFormat.length > 0) {
-                        return systemClock.date.toLocaleDateString(Qt.locale(), GreetdSettings.lockDateFormat)
-                    }
-                    return systemClock.date.toLocaleDateString(Qt.locale(), Locale.LongFormat)
+                property var timeParts: fullTimeStr.split(':')
+                property string hours: timeParts[0] || ""
+                property string minutes: timeParts[1] || ""
+                property string secondsWithAmPm: timeParts.length > 2 ? timeParts[2] : ""
+                property string seconds: secondsWithAmPm.replace(/\s*(AM|PM|am|pm)$/i, '')
+                property string ampm: {
+                    const match = fullTimeStr.match(/\s*(AM|PM|am|pm)$/i)
+                    return match ? match[0].trim() : ""
                 }
-                font.pixelSize: Theme.fontSizeXLarge
-                color: "white"
-                opacity: 0.9
+                property bool hasSeconds: timeParts.length > 2
+
+                StyledText {
+                    width: 75
+                    text: clockText.hours.length > 1 ? clockText.hours[0] : ""
+                    font.pixelSize: 120
+                    font.weight: Font.Light
+                    color: "white"
+                    horizontalAlignment: Text.AlignHCenter
+                }
+
+                StyledText {
+                    width: 75
+                    text: clockText.hours.length > 1 ? clockText.hours[1] : clockText.hours.length > 0 ? clockText.hours[0] : ""
+                    font.pixelSize: 120
+                    font.weight: Font.Light
+                    color: "white"
+                    horizontalAlignment: Text.AlignHCenter
+                }
+
+                StyledText {
+                    text: ":"
+                    font.pixelSize: 120
+                    font.weight: Font.Light
+                    color: "white"
+                }
+
+                StyledText {
+                    width: 75
+                    text: clockText.minutes.length > 0 ? clockText.minutes[0] : ""
+                    font.pixelSize: 120
+                    font.weight: Font.Light
+                    color: "white"
+                    horizontalAlignment: Text.AlignHCenter
+                }
+
+                StyledText {
+                    width: 75
+                    text: clockText.minutes.length > 1 ? clockText.minutes[1] : ""
+                    font.pixelSize: 120
+                    font.weight: Font.Light
+                    color: "white"
+                    horizontalAlignment: Text.AlignHCenter
+                }
+
+                StyledText {
+                    text: clockText.hasSeconds ? ":" : ""
+                    font.pixelSize: 120
+                    font.weight: Font.Light
+                    color: "white"
+                    visible: clockText.hasSeconds
+                }
+
+                StyledText {
+                    width: 75
+                    text: clockText.hasSeconds && clockText.seconds.length > 0 ? clockText.seconds[0] : ""
+                    font.pixelSize: 120
+                    font.weight: Font.Light
+                    color: "white"
+                    horizontalAlignment: Text.AlignHCenter
+                    visible: clockText.hasSeconds
+                }
+
+                StyledText {
+                    width: 75
+                    text: clockText.hasSeconds && clockText.seconds.length > 1 ? clockText.seconds[1] : ""
+                    font.pixelSize: 120
+                    font.weight: Font.Light
+                    color: "white"
+                    horizontalAlignment: Text.AlignHCenter
+                    visible: clockText.hasSeconds
+                }
+
+                StyledText {
+                    width: 20
+                    text: " "
+                    font.pixelSize: 120
+                    font.weight: Font.Light
+                    color: "white"
+                    visible: clockText.ampm !== ""
+                }
+
+                StyledText {
+                    text: clockText.ampm
+                    font.pixelSize: 120
+                    font.weight: Font.Light
+                    color: "white"
+                    visible: clockText.ampm !== ""
+                }
             }
+        }
+
+        StyledText {
+            anchors.centerIn: parent
+            anchors.verticalCenterOffset: -10
+            text: {
+                if (GreetdSettings.lockDateFormat && GreetdSettings.lockDateFormat.length > 0) {
+                    return systemClock.date.toLocaleDateString(Qt.locale(), GreetdSettings.lockDateFormat)
+                }
+                return systemClock.date.toLocaleDateString(Qt.locale(), Locale.LongFormat)
+            }
+            font.pixelSize: Theme.fontSizeXLarge
+            color: "white"
+            opacity: 0.9
         }
 
         Item {
@@ -322,12 +375,17 @@ Item {
                         TextInput {
                             id: inputField
 
+                            property bool syncingFromState: false
+
                             anchors.fill: parent
                             anchors.leftMargin: lockIcon.width + Theme.spacingM * 2
                             anchors.rightMargin: {
                                 let margin = Theme.spacingM
                                 if (GreeterState.showPasswordInput && revealButton.visible) {
                                     margin += revealButton.width
+                                }
+                                if (virtualKeyboardButton.visible) {
+                                    margin += virtualKeyboardButton.width
                                 }
                                 if (enterButton.visible) {
                                     margin += enterButton.width + 2
@@ -338,6 +396,7 @@ Item {
                             focus: true
                             echoMode: GreeterState.showPasswordInput ? (parent.showPassword ? TextInput.Normal : TextInput.Password) : TextInput.Normal
                             onTextChanged: {
+                                if (syncingFromState) return
                                 if (GreeterState.showPasswordInput) {
                                     GreeterState.passwordBuffer = text
                                 } else {
@@ -355,20 +414,30 @@ Item {
                                         GreeterState.showPasswordInput = true
                                         PortalService.getGreeterUserProfileImage(GreeterState.username)
                                         GreeterState.passwordBuffer = ""
-                                        inputField.text = ""
+                                        syncingFromState = true
+                                        text = ""
+                                        syncingFromState = false
                                     }
                                 }
                             }
 
                             Component.onCompleted: {
+                                syncingFromState = true
                                 text = GreeterState.showPasswordInput ? GreeterState.passwordBuffer : GreeterState.usernameInput
-                                if (isPrimaryScreen)
+                                syncingFromState = false
+                                if (isPrimaryScreen && !powerMenu.isVisible)
                                     forceActiveFocus()
                             }
                             onVisibleChanged: {
-                                if (visible && isPrimaryScreen)
+                                if (visible && isPrimaryScreen && !powerMenu.isVisible)
                                     forceActiveFocus()
                             }
+                        }
+
+                        KeyboardController {
+                            id: keyboard_controller
+                            target: inputField
+                            rootObject: root
                         }
 
                         StyledText {
@@ -376,7 +445,7 @@ Item {
 
                             anchors.left: lockIcon.right
                             anchors.leftMargin: Theme.spacingM
-                            anchors.right: (GreeterState.showPasswordInput && revealButton.visible ? revealButton.left : (enterButton.visible ? enterButton.left : parent.right))
+                            anchors.right: (GreeterState.showPasswordInput && revealButton.visible ? revealButton.left : (virtualKeyboardButton.visible ? virtualKeyboardButton.left : (enterButton.visible ? enterButton.left : parent.right)))
                             anchors.rightMargin: 2
                             anchors.verticalCenter: parent.verticalCenter
                             text: {
@@ -413,7 +482,7 @@ Item {
                         StyledText {
                             anchors.left: lockIcon.right
                             anchors.leftMargin: Theme.spacingM
-                            anchors.right: (GreeterState.showPasswordInput && revealButton.visible ? revealButton.left : (enterButton.visible ? enterButton.left : parent.right))
+                            anchors.right: (GreeterState.showPasswordInput && revealButton.visible ? revealButton.left : (virtualKeyboardButton.visible ? virtualKeyboardButton.left : (enterButton.visible ? enterButton.left : parent.right)))
                             anchors.rightMargin: 2
                             anchors.verticalCenter: parent.verticalCenter
                             text: {
@@ -421,14 +490,16 @@ Item {
                                     if (parent.showPassword) {
                                         return GreeterState.passwordBuffer
                                     }
-                                    return "•".repeat(Math.min(GreeterState.passwordBuffer.length, 25))
+                                    return "•".repeat(GreeterState.passwordBuffer.length)
                                 }
                                 return GreeterState.usernameInput
                             }
                             color: Theme.surfaceText
                             font.pixelSize: (GreeterState.showPasswordInput && !parent.showPassword) ? Theme.fontSizeLarge : Theme.fontSizeMedium
                             opacity: (GreeterState.showPasswordInput ? GreeterState.passwordBuffer.length > 0 : GreeterState.usernameInput.length > 0) ? 1 : 0
-                            elide: Text.ElideRight
+                            clip: true
+                            elide: Text.ElideNone
+                            horizontalAlignment: implicitWidth > width ? Text.AlignRight : Text.AlignLeft
 
                             Behavior on opacity {
                                 NumberAnimation {
@@ -441,14 +512,32 @@ Item {
                         DankActionButton {
                             id: revealButton
 
-                            anchors.right: enterButton.visible ? enterButton.left : parent.right
-                            anchors.rightMargin: enterButton.visible ? 0 : Theme.spacingS
+                            anchors.right: virtualKeyboardButton.visible ? virtualKeyboardButton.left : (enterButton.visible ? enterButton.left : parent.right)
+                            anchors.rightMargin: 0
                             anchors.verticalCenter: parent.verticalCenter
                             iconName: parent.showPassword ? "visibility_off" : "visibility"
                             buttonSize: 32
                             visible: GreeterState.showPasswordInput && GreeterState.passwordBuffer.length > 0 && Greetd.state === GreetdState.Inactive && !GreeterState.unlocking
                             enabled: visible
                             onClicked: parent.showPassword = !parent.showPassword
+                        }
+                        DankActionButton {
+                            id: virtualKeyboardButton
+
+                            anchors.right: enterButton.visible ? enterButton.left : parent.right
+                            anchors.rightMargin: enterButton.visible ? 0 : Theme.spacingS
+                            anchors.verticalCenter: parent.verticalCenter
+                            iconName: "keyboard"
+                            buttonSize: 32
+                            visible: Greetd.state === GreetdState.Inactive && !GreeterState.unlocking
+                            enabled: visible
+                            onClicked: {
+                                if (keyboard_controller.isKeyboardActive) {
+                                    keyboard_controller.hide()
+                                } else {
+                                    keyboard_controller.show()
+                                }
+                            }
                         }
 
                         DankActionButton {
@@ -549,7 +638,7 @@ Item {
                         }
 
                         StyledText {
-                            text: "Switch User"
+                            text: I18n.tr("Switch User")
                             font.pixelSize: Theme.fontSizeMedium
                             color: Theme.surfaceText
                             anchors.verticalCenter: parent.verticalCenter
@@ -658,180 +747,11 @@ Item {
                 height: 24
                 color: Qt.rgba(255, 255, 255, 0.2)
                 anchors.verticalCenter: parent.verticalCenter
-                visible: MprisController.activePlayer
-            }
-
-            Row {
-                spacing: Theme.spacingS
-                visible: MprisController.activePlayer
-                anchors.verticalCenter: parent.verticalCenter
-
-                Item {
-                    width: 20
-                    height: Theme.iconSize
-                    anchors.verticalCenter: parent.verticalCenter
-
-                    Loader {
-                        active: MprisController.activePlayer?.playbackState === MprisPlaybackState.Playing
-
-                        sourceComponent: Component {
-                            Ref {
-                                service: CavaService
-                            }
-                        }
-                    }
-
-                    Timer {
-                        running: !CavaService.cavaAvailable && MprisController.activePlayer?.playbackState === MprisPlaybackState.Playing
-                        interval: 256
-                        repeat: true
-                        onTriggered: {
-                            CavaService.values = [Math.random() * 40 + 10, Math.random() * 60 + 20, Math.random() * 50 + 15, Math.random() * 35 + 20, Math.random() * 45 + 15, Math.random() * 55 + 25]
-                        }
-                    }
-
-                    Row {
-                        anchors.centerIn: parent
-                        spacing: 1.5
-
-                        Repeater {
-                            model: 6
-
-                            Rectangle {
-                                width: 2
-                                height: {
-                                    if (MprisController.activePlayer?.playbackState === MprisPlaybackState.Playing && CavaService.values.length > index) {
-                                        const rawLevel = CavaService.values[index] || 0
-                                        const scaledLevel = Math.sqrt(Math.min(Math.max(rawLevel, 0), 100) / 100) * 100
-                                        const maxHeight = Theme.iconSize - 2
-                                        const minHeight = 3
-                                        return minHeight + (scaledLevel / 100) * (maxHeight - minHeight)
-                                    }
-                                    return 3
-                                }
-                                radius: 1.5
-                                color: "white"
-                                anchors.verticalCenter: parent.verticalCenter
-
-                                Behavior on height {
-                                    NumberAnimation {
-                                        duration: Anims.durShort
-                                        easing.type: Easing.BezierSpline
-                                        easing.bezierCurve: Anims.standardDecel
-                                    }
-                                }
-                            }
-                        }
-                    }
+                visible: {
+                    const keyboardVisible = (CompositorService.isNiri && NiriService.keyboardLayoutNames.length > 1) ||
+                                          (CompositorService.isHyprland && hyprlandLayoutCount > 1)
+                    return keyboardVisible && WeatherService.weather.available
                 }
-
-                StyledText {
-                    text: {
-                        const player = MprisController.activePlayer
-                        if (!player?.trackTitle)
-                            return ""
-                        const title = player.trackTitle
-                        const artist = player.trackArtist || ""
-                        return artist ? title + " • " + artist : title
-                    }
-                    font.pixelSize: Theme.fontSizeLarge
-                    color: "white"
-                    opacity: 0.9
-                    anchors.verticalCenter: parent.verticalCenter
-                    elide: Text.ElideRight
-                    width: Math.min(implicitWidth, 400)
-                    wrapMode: Text.NoWrap
-                    maximumLineCount: 1
-                }
-
-                Row {
-                    spacing: Theme.spacingXS
-                    anchors.verticalCenter: parent.verticalCenter
-
-                    Rectangle {
-                        width: 20
-                        height: 20
-                        radius: 10
-                        anchors.verticalCenter: parent.verticalCenter
-                        color: prevArea.containsMouse ? Qt.rgba(255, 255, 255, 0.2) : "transparent"
-                        visible: MprisController.activePlayer
-                        opacity: (MprisController.activePlayer?.canGoPrevious ?? false) ? 1 : 0.3
-
-                        DankIcon {
-                            anchors.centerIn: parent
-                            name: "skip_previous"
-                            size: 12
-                            color: "white"
-                        }
-
-                        MouseArea {
-                            id: prevArea
-                            anchors.fill: parent
-                            enabled: MprisController.activePlayer?.canGoPrevious ?? false
-                            hoverEnabled: enabled
-                            cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
-                            onClicked: MprisController.activePlayer?.previous()
-                        }
-                    }
-
-                    Rectangle {
-                        width: 24
-                        height: 24
-                        radius: 12
-                        anchors.verticalCenter: parent.verticalCenter
-                        color: MprisController.activePlayer?.playbackState === MprisPlaybackState.Playing ? Qt.rgba(255, 255, 255, 0.9) : Qt.rgba(255, 255, 255, 0.2)
-                        visible: MprisController.activePlayer
-
-                        DankIcon {
-                            anchors.centerIn: parent
-                            name: MprisController.activePlayer?.playbackState === MprisPlaybackState.Playing ? "pause" : "play_arrow"
-                            size: 14
-                            color: MprisController.activePlayer?.playbackState === MprisPlaybackState.Playing ? "black" : "white"
-                        }
-
-                        MouseArea {
-                            anchors.fill: parent
-                            enabled: MprisController.activePlayer
-                            hoverEnabled: enabled
-                            cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
-                            onClicked: MprisController.activePlayer?.togglePlaying()
-                        }
-                    }
-
-                    Rectangle {
-                        width: 20
-                        height: 20
-                        radius: 10
-                        anchors.verticalCenter: parent.verticalCenter
-                        color: nextArea.containsMouse ? Qt.rgba(255, 255, 255, 0.2) : "transparent"
-                        visible: MprisController.activePlayer
-                        opacity: (MprisController.activePlayer?.canGoNext ?? false) ? 1 : 0.3
-
-                        DankIcon {
-                            anchors.centerIn: parent
-                            name: "skip_next"
-                            size: 12
-                            color: "white"
-                        }
-
-                        MouseArea {
-                            id: nextArea
-                            anchors.fill: parent
-                            enabled: MprisController.activePlayer?.canGoNext ?? false
-                            hoverEnabled: enabled
-                            cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
-                            onClicked: MprisController.activePlayer?.next()
-                        }
-                    }
-                }
-            }
-
-            Rectangle {
-                width: 1
-                height: 24
-                color: Qt.rgba(255, 255, 255, 0.2)
-                anchors.verticalCenter: parent.verticalCenter
-                visible: MprisController.activePlayer && WeatherService.weather.available
             }
 
             Row {
@@ -1038,33 +958,15 @@ Item {
             visible: root.randomFact !== ""
         }
 
-        Row {
+        DankActionButton {
             anchors.bottom: parent.bottom
             anchors.left: parent.left
             anchors.margins: Theme.spacingXL
-            spacing: Theme.spacingL
             visible: GreetdSettings.lockScreenShowPowerActions
-
-            DankActionButton {
-                iconName: "power_settings_new"
-                iconColor: Theme.error
-                buttonSize: 40
-                onClicked: {
-                    showPowerDialog("Power Off", "Power off this computer?", "Power Off", Theme.error, function () {
-                        SessionService.poweroff()
-                    })
-                }
-            }
-
-            DankActionButton {
-                iconName: "refresh"
-                buttonSize: 40
-                onClicked: {
-                    showPowerDialog("Restart", "Restart this computer?", "Restart", Theme.primary, function () {
-                        SessionService.reboot()
-                    })
-                }
-            }
+            iconName: "power_settings_new"
+            iconColor: Theme.error
+            buttonSize: 40
+            onClicked: powerMenu.show()
         }
 
         Item {
@@ -1250,13 +1152,12 @@ Item {
         }
 
         function onReadyToLaunch() {
-            root.sessionLock.locked = false
             GreeterState.unlocking = true
             const sessionCmd = GreeterState.selectedSession || GreeterState.sessionExecs[GreeterState.currentSessionIndex]
             if (sessionCmd) {
                 GreetdMemory.setLastSessionId(GreeterState.sessionPaths[GreeterState.currentSessionIndex])
                 GreetdMemory.setLastSuccessfulUser(GreeterState.username)
-                Greetd.launch(sessionCmd.split(" "), ["XDG_SESSION_TYPE=wayland"], true)
+                Greetd.launch(sessionCmd.split(" "), ["XDG_SESSION_TYPE=wayland"])
             }
         }
 
@@ -1279,90 +1180,12 @@ Item {
         onTriggered: GreeterState.pamState = ""
     }
 
-    Rectangle {
-        anchors.fill: parent
-        color: Qt.rgba(0, 0, 0, 0.8)
-        visible: powerDialogVisible
-        z: 1000
-
-        Rectangle {
-            anchors.centerIn: parent
-            width: 320
-            height: 180
-            radius: Theme.cornerRadius
-            color: Theme.surfaceContainer
-            border.color: Theme.outline
-            border.width: 1
-
-            Column {
-                anchors.centerIn: parent
-                spacing: Theme.spacingXL
-
-                DankIcon {
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    name: "power_settings_new"
-                    size: 32
-                    color: powerDialogConfirmColor
-                }
-
-                StyledText {
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    text: powerDialogMessage
-                    color: Theme.surfaceText
-                    font.pixelSize: Theme.fontSizeLarge
-                    font.weight: Font.Medium
-                }
-
-                Row {
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    spacing: Theme.spacingM
-
-                    Rectangle {
-                        width: 100
-                        height: 40
-                        radius: Theme.cornerRadius
-                        color: Theme.surfaceVariant
-
-                        StyledText {
-                            anchors.centerIn: parent
-                            text: "Cancel"
-                            color: Theme.surfaceText
-                            font.pixelSize: Theme.fontSizeMedium
-                        }
-
-                        MouseArea {
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: hidePowerDialog()
-                        }
-                    }
-
-                    Rectangle {
-                        width: 100
-                        height: 40
-                        radius: Theme.cornerRadius
-                        color: powerDialogConfirmColor
-
-                        StyledText {
-                            anchors.centerIn: parent
-                            text: powerDialogConfirmText
-                            color: Theme.primaryText
-                            font.pixelSize: Theme.fontSizeMedium
-                            font.weight: Font.Medium
-                        }
-
-                        MouseArea {
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: {
-                                hidePowerDialog()
-                                powerDialogOnConfirm()
-                            }
-                        }
-                    }
-                }
+    LockPowerMenu {
+        id: powerMenu
+        showLogout: false
+        onClosed: {
+            if (isPrimaryScreen && inputField && inputField.forceActiveFocus) {
+                Qt.callLater(() => inputField.forceActiveFocus())
             }
         }
     }

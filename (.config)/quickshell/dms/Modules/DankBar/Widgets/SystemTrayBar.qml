@@ -7,7 +7,7 @@ import Quickshell.Widgets
 import qs.Common
 import qs.Widgets
 
-Rectangle {
+Item {
     id: root
 
     property bool isVertical: axis?.isVertical ?? false
@@ -15,26 +15,49 @@ Rectangle {
     property var parentWindow: null
     property var parentScreen: null
     property real widgetThickness: 30
+    property real barThickness: 48
     property bool isAtBottom: false
     readonly property real horizontalPadding: SettingsData.dankBarNoBackground ? 2 : Theme.spacingS
-    readonly property int calculatedSize: SystemTray.items.values.length > 0 ? SystemTray.items.values.length * 24 + horizontalPadding * 2 : 0
-
-    width: isVertical ? widgetThickness : calculatedSize
-    height: isVertical ? calculatedSize : widgetThickness
-    radius: SettingsData.dankBarNoBackground ? 0 : Theme.cornerRadius
-    color: {
-        if (SystemTray.items.values.length === 0) {
-            return "transparent";
-        }
-
-        if (SettingsData.dankBarNoBackground) {
-            return "transparent";
-        }
-
-        const baseColor = Theme.widgetBaseBackgroundColor;
-        return Qt.rgba(baseColor.r, baseColor.g, baseColor.b, baseColor.a * Theme.widgetTransparency);
+    readonly property var hiddenTrayIds: {
+        const envValue = Quickshell.env("DMS_HIDE_TRAYIDS") || ""
+        return envValue ? envValue.split(",").map(id => id.trim().toLowerCase()) : []
     }
-    visible: SystemTray.items.values.length > 0
+    readonly property var visibleTrayItems: {
+        if (!hiddenTrayIds.length) {
+            return SystemTray.items.values
+        }
+        return SystemTray.items.values.filter(item => {
+            const itemId = item?.id || ""
+            return !hiddenTrayIds.includes(itemId.toLowerCase())
+        })
+    }
+    readonly property int calculatedSize: visibleTrayItems.length > 0 ? visibleTrayItems.length * 24 + horizontalPadding * 2 : 0
+    readonly property real visualWidth: isVertical ? widgetThickness : calculatedSize
+    readonly property real visualHeight: isVertical ? calculatedSize : widgetThickness
+
+    width: isVertical ? barThickness : visualWidth
+    height: isVertical ? visualHeight : barThickness
+    visible: visibleTrayItems.length > 0
+
+    Rectangle {
+        id: visualBackground
+        width: root.visualWidth
+        height: root.visualHeight
+        anchors.centerIn: parent
+        radius: SettingsData.dankBarNoBackground ? 0 : Theme.cornerRadius
+        color: {
+            if (visibleTrayItems.length === 0) {
+                return "transparent";
+            }
+
+            if (SettingsData.dankBarNoBackground) {
+                return "transparent";
+            }
+
+            const baseColor = Theme.widgetBaseBackgroundColor;
+            return Qt.rgba(baseColor.r, baseColor.g, baseColor.b, baseColor.a * Theme.widgetTransparency);
+        }
+    }
 
     Loader {
         id: layoutLoader
@@ -48,81 +71,100 @@ Rectangle {
             spacing: 0
 
             Repeater {
-                model: SystemTray.items.values
+                model: root.visibleTrayItems
 
                 delegate: Item {
-                property var trayItem: modelData
-                property string iconSource: {
-                    let icon = trayItem && trayItem.icon;
-                    if (typeof icon === 'string' || icon instanceof String) {
-                        if (icon === "") {
-                            return "";
+                    id: delegateRoot
+                    property var trayItem: modelData
+                    property string iconSource: {
+                        let icon = trayItem && trayItem.icon;
+                        if (typeof icon === 'string' || icon instanceof String) {
+                            if (icon === "") {
+                                return "";
+                            }
+                            if (icon.includes("?path=")) {
+                                const split = icon.split("?path=");
+                                if (split.length !== 2) {
+                                    return icon;
+                                }
+
+                                const name = split[0];
+                                const path = split[1];
+                                let fileName = name.substring(name.lastIndexOf("/") + 1);
+                                if (fileName.startsWith("dropboxstatus")) {
+                                    fileName = `hicolor/16x16/status/${fileName}`;
+                                }
+                                return `file://${path}/${fileName}`;
+                            }
+                            if (icon.startsWith("/") && !icon.startsWith("file://")) {
+                                return `file://${icon}`;
+                            }
+                            return icon;
                         }
-                        if (icon.includes("?path=")) {
-                            const split = icon.split("?path=");
-                            if (split.length !== 2) {
-                                return icon;
+                        return "";
+                    }
+
+                    width: 24
+                    height: root.barThickness
+
+                    Rectangle {
+                        id: visualContent
+                        width: 24
+                        height: 24
+                        anchors.centerIn: parent
+                        radius: Theme.cornerRadius
+                        color: trayItemArea.containsMouse ? Theme.primaryHover : "transparent"
+
+                        IconImage {
+                            id: iconImg
+                            anchors.centerIn: parent
+                            width: Theme.barIconSize(root.barThickness)
+                            height: Theme.barIconSize(root.barThickness)
+                            source: delegateRoot.iconSource
+                            asynchronous: true
+                            smooth: true
+                            mipmap: true
+                            visible: status === Image.Ready
+                        }
+
+                        Text {
+                            anchors.centerIn: parent
+                            visible: !iconImg.visible
+                            text: {
+                                const itemId = trayItem?.id || ""
+                                if (!itemId) {
+                                    return "?"
+                                }
+                                return itemId.charAt(0).toUpperCase()
+                            }
+                            font.pixelSize: 10
+                            color: Theme.surfaceText
+                        }
+                    }
+
+                    MouseArea {
+                        id: trayItemArea
+
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        acceptedButtons: Qt.LeftButton | Qt.RightButton
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: (mouse) => {
+                            if (!delegateRoot.trayItem) {
+                                return;
                             }
 
-                            const name = split[0];
-                            const path = split[1];
-                            const fileName = name.substring(name.lastIndexOf("/") + 1);
-                            return `file://${path}/${fileName}`;
-                        }
-                        if (icon.startsWith("/") && !icon.startsWith("file://")) {
-                            return `file://${icon}`;
-                        }
-                        return icon;
-                    }
-                    return "";
-                }
-
-                width: 24
-                height: 24
-
-                Rectangle {
-                    anchors.fill: parent
-                    radius: Theme.cornerRadius
-                    color: trayItemArea.containsMouse ? Theme.primaryHover : "transparent"
-
-
-                }
-
-                IconImage {
-                    anchors.centerIn: parent
-                    width: 16
-                    height: 16
-                    source: parent.iconSource
-                    asynchronous: true
-                    smooth: true
-                    mipmap: true
-                }
-
-                MouseArea {
-                    id: trayItemArea
-
-                    anchors.fill: parent
-                    acceptedButtons: Qt.LeftButton | Qt.RightButton
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: (mouse) => {
-                        if (!trayItem) {
-                            return;
-                        }
-
-                        if (mouse.button === Qt.LeftButton && !trayItem.onlyMenu) {
-                            trayItem.activate();
-                            return ;
-                        }
-                        if (trayItem.hasMenu) {
-                            root.showForTrayItem(trayItem, parent, parentScreen, root.isAtBottom, root.isVertical, root.axis);
+                            if (mouse.button === Qt.LeftButton && !delegateRoot.trayItem.onlyMenu) {
+                                delegateRoot.trayItem.activate();
+                                return ;
+                            }
+                            if (delegateRoot.trayItem.hasMenu) {
+                                root.showForTrayItem(delegateRoot.trayItem, visualContent, parentScreen, root.isAtBottom, root.isVertical, root.axis);
+                            }
                         }
                     }
                 }
-
             }
-
-        }
         }
     }
 
@@ -132,79 +174,100 @@ Rectangle {
             spacing: 0
 
             Repeater {
-                model: SystemTray.items.values
+                model: root.visibleTrayItems
 
                 delegate: Item {
-                property var trayItem: modelData
-                property string iconSource: {
-                    let icon = trayItem && trayItem.icon;
-                    if (typeof icon === 'string' || icon instanceof String) {
-                        if (icon === "") {
-                            return "";
+                    id: delegateRoot
+                    property var trayItem: modelData
+                    property string iconSource: {
+                        let icon = trayItem && trayItem.icon;
+                        if (typeof icon === 'string' || icon instanceof String) {
+                            if (icon === "") {
+                                return "";
+                            }
+                            if (icon.includes("?path=")) {
+                                const split = icon.split("?path=");
+                                if (split.length !== 2) {
+                                    return icon;
+                                }
+
+                                const name = split[0];
+                                const path = split[1];
+                                let fileName = name.substring(name.lastIndexOf("/") + 1);
+                                if (fileName.startsWith("dropboxstatus")) {
+                                    fileName = `hicolor/16x16/status/${fileName}`;
+                                }
+                                return `file://${path}/${fileName}`;
+                            }
+                            if (icon.startsWith("/") && !icon.startsWith("file://")) {
+                                return `file://${icon}`;
+                            }
+                            return icon;
                         }
-                        if (icon.includes("?path=")) {
-                            const split = icon.split("?path=");
-                            if (split.length !== 2) {
-                                return icon;
+                        return "";
+                    }
+
+                    width: root.barThickness
+                    height: 24
+
+                    Rectangle {
+                        id: visualContent
+                        width: 24
+                        height: 24
+                        anchors.centerIn: parent
+                        radius: Theme.cornerRadius
+                        color: trayItemArea.containsMouse ? Theme.primaryHover : "transparent"
+
+                        IconImage {
+                            id: iconImg
+                            anchors.centerIn: parent
+                            width: Theme.barIconSize(root.barThickness)
+                            height: Theme.barIconSize(root.barThickness)
+                            source: delegateRoot.iconSource
+                            asynchronous: true
+                            smooth: true
+                            mipmap: true
+                            visible: status === Image.Ready
+                        }
+
+                        Text {
+                            anchors.centerIn: parent
+                            visible: !iconImg.visible
+                            text: {
+                                const itemId = trayItem?.id || ""
+                                if (!itemId) {
+                                    return "?"
+                                }
+                                return itemId.charAt(0).toUpperCase()
+                            }
+                            font.pixelSize: 10
+                            color: Theme.surfaceText
+                        }
+                    }
+
+                    MouseArea {
+                        id: trayItemArea
+
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        acceptedButtons: Qt.LeftButton | Qt.RightButton
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: (mouse) => {
+                            if (!delegateRoot.trayItem) {
+                                return;
                             }
 
-                            const name = split[0];
-                            const path = split[1];
-                            const fileName = name.substring(name.lastIndexOf("/") + 1);
-                            return `file://${path}/${fileName}`;
-                        }
-                        if (icon.startsWith("/") && !icon.startsWith("file://")) {
-                            return `file://${icon}`;
-                        }
-                        return icon;
-                    }
-                    return "";
-                }
-
-                width: 24
-                height: 24
-
-                Rectangle {
-                    anchors.fill: parent
-                    radius: Theme.cornerRadius
-                    color: trayItemArea.containsMouse ? Theme.primaryHover : "transparent"
-                }
-
-                IconImage {
-                    anchors.centerIn: parent
-                    width: 16
-                    height: 16
-                    source: parent.iconSource
-                    asynchronous: true
-                    smooth: true
-                    mipmap: true
-                }
-
-                MouseArea {
-                    id: trayItemArea
-
-                    anchors.fill: parent
-                    acceptedButtons: Qt.LeftButton | Qt.RightButton
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: (mouse) => {
-                        if (!trayItem) {
-                            return;
-                        }
-
-                        if (mouse.button === Qt.LeftButton && !trayItem.onlyMenu) {
-                            trayItem.activate();
-                            return ;
-                        }
-                        if (trayItem.hasMenu) {
-                            root.showForTrayItem(trayItem, parent, parentScreen, root.isAtBottom, root.isVertical, root.axis);
+                            if (mouse.button === Qt.LeftButton && !delegateRoot.trayItem.onlyMenu) {
+                                delegateRoot.trayItem.activate();
+                                return ;
+                            }
+                            if (delegateRoot.trayItem.hasMenu) {
+                                root.showForTrayItem(delegateRoot.trayItem, visualContent, parentScreen, root.isAtBottom, root.isVertical, root.axis);
+                            }
                         }
                     }
                 }
-
             }
-
-        }
         }
     }
 
@@ -377,7 +440,7 @@ Rectangle {
                         }
                     }
 
-                    color: Theme.popupBackground()
+                    color: Theme.withAlpha(Theme.surfaceContainer, Theme.popupTransparency)
                     radius: Theme.cornerRadius
                     border.color: Qt.rgba(Theme.outline.r, Theme.outline.g, Theme.outline.b, 0.08)
                     border.width: 1
@@ -445,7 +508,7 @@ Rectangle {
                                 }
 
                                 StyledText {
-                                    text: "Back"
+                                    text: I18n.tr("Back")
                                     font.pixelSize: Theme.fontSizeSmall
                                     color: Theme.surfaceText
                                     anchors.verticalCenter: parent.verticalCenter
@@ -455,7 +518,6 @@ Rectangle {
                             MouseArea {
                                 id: backArea
                                 anchors.fill: parent
-                                hoverEnabled: true
                                 cursorShape: Qt.PointingHandCursor
                                 onClicked: menuRoot.goBack()
                             }
@@ -491,7 +553,6 @@ Rectangle {
                                     id: itemArea
                                     anchors.fill: parent
                                     enabled: !menuEntry?.isSeparator && (menuEntry?.enabled !== false)
-                                    hoverEnabled: true
                                     cursorShape: Qt.PointingHandCursor
 
                                     onClicked: {

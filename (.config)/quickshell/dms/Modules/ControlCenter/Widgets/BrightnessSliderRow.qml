@@ -8,41 +8,104 @@ import qs.Widgets
 Row {
     id: root
 
+    property string deviceName: ""
+    property string instanceId: ""
+    property string screenName: ""
+    property var parentScreen: null
+
+    signal iconClicked
+
     height: 40
     spacing: 0
+
+    property string targetDeviceName: {
+        if (!DisplayService.brightnessAvailable || !DisplayService.devices || DisplayService.devices.length === 0) {
+            return ""
+        }
+
+        if (screenName && screenName.length > 0) {
+            const pins = SettingsData.brightnessDevicePins || {}
+            const pinnedDevice = pins[screenName]
+            if (pinnedDevice && pinnedDevice.length > 0) {
+                const found = DisplayService.devices.find(dev => dev.name === pinnedDevice)
+                if (found) {
+                    return found.name
+                }
+            }
+        }
+
+        if (deviceName && deviceName.length > 0) {
+            const found = DisplayService.devices.find(dev => dev.name === deviceName)
+            if (found) {
+                return found.name
+            }
+        }
+
+        const currentDeviceName = DisplayService.currentDevice
+        if (currentDeviceName) {
+            const found = DisplayService.devices.find(dev => dev.name === currentDeviceName)
+            if (found) {
+                return found.name
+            }
+        }
+
+        const backlight = DisplayService.devices.find(d => d.class === "backlight")
+        if (backlight) {
+            return backlight.name
+        }
+
+        const ddc = DisplayService.devices.find(d => d.class === "ddc")
+        if (ddc) {
+            return ddc.name
+        }
+
+        return DisplayService.devices.length > 0 ? DisplayService.devices[0].name : ""
+    }
+
+    property var targetDevice: {
+        if (!targetDeviceName || !DisplayService.devices) {
+            return null
+        }
+
+        return DisplayService.devices.find(dev => dev.name === targetDeviceName) || null
+    }
+
+    property real targetBrightness: {
+        DisplayService.brightnessVersion
+        if (!targetDeviceName) {
+            return 0
+        }
+
+        return DisplayService.getDeviceBrightness(targetDeviceName)
+    }
 
     Rectangle {
         width: Theme.iconSize + Theme.spacingS * 2
         height: Theme.iconSize + Theme.spacingS * 2
         anchors.verticalCenter: parent.verticalCenter
         radius: (Theme.iconSize + Theme.spacingS * 2) / 2
-        color: iconArea.containsMouse
-               ? Qt.rgba(Theme.primary.r, Theme.primary.g, Theme.primary.b, 0.12)
-               : Theme.withAlpha(Theme.primary, 0)
+        color: iconArea.containsMouse ? Qt.rgba(Theme.primary.r, Theme.primary.g, Theme.primary.b, 0.12) : Theme.withAlpha(Theme.primary, 0)
 
         MouseArea {
             id: iconArea
             anchors.fill: parent
             hoverEnabled: true
-            cursorShape: DisplayService.devices.length > 1 ? Qt.PointingHandCursor : Qt.ArrowCursor
+            cursorShape: DisplayService.devices && DisplayService.devices.length > 1 ? Qt.PointingHandCursor : Qt.ArrowCursor
 
-            onClicked: function(event) {
-                if (DisplayService.devices.length > 1) {
-                    if (deviceMenu.visible) {
-                        deviceMenu.close()
-                    } else {
-                        deviceMenu.popup(iconArea, 0, iconArea.height + Theme.spacingXS)
-                    }
-                    event.accepted = true
+            onClicked: {
+                if (DisplayService.devices && DisplayService.devices.length > 1) {
+                    root.iconClicked()
                 }
             }
 
             onEntered: {
                 tooltipLoader.active = true
                 if (tooltipLoader.item) {
-                    const tooltipText = DisplayService.currentDevice ? "bl device: " + DisplayService.currentDevice : "Backlight Control"
-                    const p = iconArea.mapToItem(null, iconArea.width / 2, 0)
-                    tooltipLoader.item.show(tooltipText, p.x, p.y - 40, null)
+                    const tooltipText = targetDevice ? "bl device: " + targetDevice.name : "Backlight Control"
+                    const globalPos = iconArea.mapToGlobal(iconArea.width / 2, iconArea.height / 2)
+                    const screenY = root.parentScreen?.y ?? 0
+                    const relativeY = globalPos.y - screenY - 55
+                    tooltipLoader.item.show(tooltipText, globalPos.x, relativeY, root.parentScreen)
                 }
             }
 
@@ -56,15 +119,25 @@ Row {
             DankIcon {
                 anchors.centerIn: parent
                 name: {
-                    if (!DisplayService.brightnessAvailable) return "brightness_low"
+                    if (!DisplayService.brightnessAvailable || !targetDevice) {
+                        return "brightness_low"
+                    }
 
-                    let brightness = DisplayService.brightnessLevel
-                    if (brightness <= 33) return "brightness_low"
-                    if (brightness <= 66) return "brightness_medium"
-                    return "brightness_high"
+                    if (targetDevice.class === "backlight" || targetDevice.class === "ddc") {
+                        const brightness = targetBrightness
+                        if (brightness <= 33)
+                            return "brightness_low"
+                        if (brightness <= 66)
+                            return "brightness_medium"
+                        return "brightness_high"
+                    } else if (targetDevice.name.includes("kbd")) {
+                        return "keyboard"
+                    } else {
+                        return "lightbulb"
+                    }
                 }
                 size: Theme.iconSize
-                color: DisplayService.brightnessAvailable && DisplayService.brightnessLevel > 0 ? Theme.primary : Theme.surfaceText
+                color: DisplayService.brightnessAvailable && targetDevice && targetBrightness > 0 ? Theme.primary : Theme.surfaceText
             }
         }
     }
@@ -72,86 +145,40 @@ Row {
     DankSlider {
         anchors.verticalCenter: parent.verticalCenter
         width: parent.width - (Theme.iconSize + Theme.spacingS * 2)
-        enabled: DisplayService.brightnessAvailable
-        minimum: 1
-        maximum: 100
-        value: {
-            let level = DisplayService.brightnessLevel
-            if (level > 100) {
-                let deviceInfo = DisplayService.getCurrentDeviceInfo()
-                if (deviceInfo && deviceInfo.max > 0) {
-                    return Math.round((level / deviceInfo.max) * 100)
-                }
-                return 50
+        enabled: DisplayService.brightnessAvailable && targetDeviceName.length > 0
+        minimum: {
+            if (!targetDevice) return 1
+            const isExponential = SessionData.getBrightnessExponential(targetDevice.id)
+            if (isExponential) {
+                return 1
             }
-            return level
+            return (targetDevice.class === "backlight" || targetDevice.class === "ddc") ? 1 : 0
         }
-        onSliderValueChanged: function(newValue) {
-            if (DisplayService.brightnessAvailable) {
-                DisplayService.setBrightness(newValue)
+        maximum: {
+            if (!targetDevice) return 100
+            const isExponential = SessionData.getBrightnessExponential(targetDevice.id)
+            if (isExponential) {
+                return 100
+            }
+            return targetDevice.displayMax || 100
+        }
+        value: targetBrightness
+        showValue: true
+        unit: {
+            if (!targetDevice) return "%"
+            const isExponential = SessionData.getBrightnessExponential(targetDevice.id)
+            if (isExponential) {
+                return "%"
+            }
+            return targetDevice.class === "ddc" ? "" : "%"
+        }
+        onSliderValueChanged: function (newValue) {
+            if (DisplayService.brightnessAvailable && targetDeviceName) {
+                DisplayService.setBrightness(newValue, targetDeviceName, true)
             }
         }
         thumbOutlineColor: Theme.surfaceContainer
-        trackColor: Theme.surfaceContainerHigh
-    }
-
-    Menu {
-        id: deviceMenu
-        width: 200
-        closePolicy: Popup.CloseOnEscape
-        
-        background: Rectangle {
-            color: Theme.popupBackground()
-            radius: Theme.cornerRadius
-            border.width: 0
-            border.color: Qt.rgba(Theme.outline.r, Theme.outline.g, Theme.outline.b, 0.12)
-        }
-        
-        Instantiator {
-            model: DisplayService.devices
-            delegate: MenuItem {
-                required property var modelData
-                required property int index
-                
-                property string deviceName: modelData.name || ""
-                property string deviceClass: modelData.class || ""
-                
-                text: deviceName
-                font.pixelSize: Theme.fontSizeMedium
-                height: 40
-                
-                indicator: Rectangle {
-                    visible: DisplayService.currentDevice === parent.deviceName
-                    anchors.left: parent.left
-                    anchors.verticalCenter: parent.verticalCenter
-                    anchors.leftMargin: Theme.spacingS
-                    width: 4
-                    height: parent.height - Theme.spacingS * 2
-                    radius: 2
-                    color: Theme.primary
-                }
-                
-                contentItem: StyledText {
-                    text: parent.text
-                    font: parent.font
-                    color: DisplayService.currentDevice === parent.deviceName ? Theme.primary : Theme.surfaceText
-                    leftPadding: Theme.spacingL
-                    verticalAlignment: Text.AlignVCenter
-                }
-                
-                background: Rectangle {
-                    color: parent.hovered ? Qt.rgba(Theme.primary.r, Theme.primary.g, Theme.primary.b, 0.08) : "transparent"
-                    radius: Theme.cornerRadius / 2
-                }
-                
-                onTriggered: {
-                    DisplayService.setCurrentDevice(deviceName, true)
-                    deviceMenu.close()
-                }
-            }
-            onObjectAdded: (index, object) => deviceMenu.insertItem(index, object)
-            onObjectRemoved: (index, object) => deviceMenu.removeItem(object)
-        }
+        trackColor: Theme.withAlpha(Theme.surfaceContainerHigh, Theme.popupTransparency)
     }
 
     Loader {

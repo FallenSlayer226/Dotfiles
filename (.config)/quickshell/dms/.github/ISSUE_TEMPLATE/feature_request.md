@@ -21,6 +21,8 @@ Is this feature specific to one compositor?
 - [ ] All compositors
 - [ ] niri
 - [ ] Hyprland
+- [ ] dwl (MangoWC)
+- [ ] sway
 
 ## Proposed Solution
 

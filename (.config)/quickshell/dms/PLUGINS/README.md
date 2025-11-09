@@ -1,10 +1,14 @@
 # Plugin System
 
-The DMS shell includes an experimental plugin system that allows extending functionality through self-contained, dynamically-loaded QML components.
+Create widgets for DankBar and Control Center using dynamically-loaded QML components.
+
+## Plugin Registry
+
+Browse and discover community plugins at **https://plugins.danklinux.com/**
 
 ## Overview
 
-The plugin system enables developers to create custom widgets that can be displayed in the DankBar alongside built-in widgets. Plugins are discovered, loaded, and managed through the **PluginService**, providing a clean separation between core shell functionality and user extensions.
+Plugins let you add custom widgets to DankBar and Control Center. They're discovered from `~/.config/DankMaterialShell/plugins/` and managed via PluginService.
 
 ## Architecture
 
@@ -45,7 +49,9 @@ $CONFIGPATH/DankMaterialShell/plugins/YourPlugin/
 
 ### Plugin Manifest (plugin.json)
 
-The manifest file defines plugin metadata and configuration:
+The manifest file defines plugin metadata and configuration.
+
+**JSON Schema:** See `plugin-schema.json` for the complete specification and validation schema.
 
 ```json
 {
@@ -54,9 +60,13 @@ The manifest file defines plugin metadata and configuration:
     "description": "Brief description of what your plugin does",
     "version": "1.0.0",
     "author": "Your Name",
-    "icon": "material_icon_name",
+    "type": "widget",
+    "capabilities": ["thing-my-plugin-does"],
     "component": "./YourWidget.qml",
+    "icon": "material_icon_name",
     "settings": "./YourSettings.qml",
+    "requires_dms": ">=0.1.0",
+    "requires": ["some-system-tool"],
     "permissions": [
         "settings_read",
         "settings_write"
@@ -67,15 +77,22 @@ The manifest file defines plugin metadata and configuration:
 **Required Fields:**
 - `id`: Unique plugin identifier (camelCase, no spaces)
 - `name`: Human-readable plugin name
-- `component`: Relative path to widget QML file
+- `description`: Short description of plugin functionality (displayed in UI)
+- `version`: Semantic version string (e.g., "1.0.0")
+- `author`: Plugin creator name or email
+- `type`: Plugin type - "widget", "daemon", or "launcher"
+- `capabilities`: Array of plugin capabilities  (e.g., ["dankbar-widget"], ["control-center"], ["monitoring"])
+- `component`: Relative path to main QML component file
+
+**Required for Launcher Type:**
+- `trigger`: Trigger string for launcher activation (e.g., "=", "#", "!")
 
 **Optional Fields:**
-- `description`: Short description of plugin functionality (displayed in UI)
-- `version`: Semantic version string (displayed in UI)
-- `author`: Plugin creator name (displayed in UI)
 - `icon`: Material Design icon name (displayed in UI)
 - `settings`: Path to settings component (enables settings UI)
-- `permissions`: Required capabilities (enforced by PluginSettings component)
+- `requires_dms`: Minimum DMS version requirement (e.g., ">=0.1.18", ">0.1.0")
+- `requires`: Array of required system tools/dependencies (e.g., ["wl-copy", "curl"])
+- `permissions`: Required DMS permissions (e.g., ["settings_read", "settings_write"])
 
 **Permissions:**
 
@@ -161,25 +178,65 @@ PluginComponent {
 - `popoutHeight`: Popout window height
 - `pillClickAction`: Custom click handler function (overrides popout)
 
-**Custom Click Actions:**
+### Control Center Integration
 
-Override the default popout behavior with `pillClickAction`:
+Add your plugin to Control Center by defining CC properties:
 
 ```qml
 PluginComponent {
-    horizontalBarPill: Component {
-        StyledText { text: "Click Me" }
+    ccWidgetIcon: "toggle_on"
+    ccWidgetPrimaryText: "My Feature"
+    ccWidgetSecondaryText: isEnabled ? "Active" : "Inactive"
+    ccWidgetIsActive: isEnabled
+
+    onCcWidgetToggled: {
+        isEnabled = !isEnabled
+        if (pluginService) {
+            pluginService.savePluginData("myPlugin", "isEnabled", isEnabled)
+        }
     }
 
-    // Simple 0-parameter function
-    pillClickAction: () => {
-        Process.exec("bash", ["-c", "notify-send 'Clicked!'"])
+    ccDetailContent: Component {
+        Rectangle {
+            implicitHeight: 200
+            color: Theme.surfaceContainerHigh
+            radius: Theme.cornerRadius
+            // Your detail UI here
+        }
     }
 
-    // Or with position parameters for popouts: (x, y, width, section, screen)
-    pillClickAction: (x, y, width, section, screen) => {
-        popoutService?.toggleControlCenter(x, y, width, section, screen)
-    }
+    horizontalBarPill: Component { /* ... */ }
+}
+```
+
+**CC Properties:**
+- `ccWidgetIcon`: Material icon name
+- `ccWidgetPrimaryText`: Main label
+- `ccWidgetSecondaryText`: Subtitle/status
+- `ccWidgetIsActive`: Active state styling
+- `ccDetailContent`: Optional dropdown panel (use for CompoundPill)
+
+**Signals:**
+- `ccWidgetToggled()`: Fired when icon clicked
+- `ccWidgetExpanded()`: Fired when expand area clicked (CompoundPill only)
+
+**Widget Sizing:**
+- 25% width → SmallToggleButton (icon only)
+- 50% width → ToggleButton (no detail) or CompoundPill (with detail)
+- Users can resize in edit mode
+
+**Custom Click Actions:**
+
+Override default popout with `pillClickAction`:
+
+```qml
+pillClickAction: () => {
+    Process.exec("bash", ["-c", "notify-send 'Clicked!'"])
+}
+
+// Or with position params: (x, y, width, section, screen)
+pillClickAction: (x, y, width, section, screen) => {
+    popoutService?.toggleControlCenter(x, y, width, section, screen)
 }
 ```
 
@@ -504,6 +561,10 @@ PluginService.getWidgetComponents(): object
 // Data Persistence
 PluginService.savePluginData(pluginId: string, key: string, value: any): bool
 PluginService.loadPluginData(pluginId: string, key: string, defaultValue: any): any
+
+// Global Variables - Shared state across all plugin instances
+PluginService.getGlobalVar(pluginId: string, varName: string, defaultValue: any): any
+PluginService.setGlobalVar(pluginId: string, varName: string, value: any): void
 ```
 
 ### Signals
@@ -512,7 +573,123 @@ PluginService.loadPluginData(pluginId: string, key: string, defaultValue: any): 
 PluginService.pluginLoaded(pluginId: string)
 PluginService.pluginUnloaded(pluginId: string)
 PluginService.pluginLoadFailed(pluginId: string, error: string)
+PluginService.globalVarChanged(pluginId: string, varName: string)
 ```
+
+## Plugin Global Variables
+
+Plugins can share state across multiple instances using global variables. This is useful when you have the same widget displayed on multiple monitors or multiple instances of the same widget on different bars.
+
+### Why Use Global Variables?
+
+Unlike regular properties which are scoped to each component instance, global variables are synchronized across all instances of your plugin. This enables:
+
+- **Multi-monitor consistency**: Same data displayed across all monitors
+- **Multi-instance widgets**: Multiple instances of the same widget sharing state
+- **Cross-component communication**: Share data between widget and settings components
+
+### Using PluginGlobalVar
+
+The `PluginGlobalVar` helper component provides reactive global variable access:
+
+```qml
+import QtQuick
+import qs.Widgets
+import qs.Modules.Plugins
+
+PluginComponent {
+    PluginGlobalVar {
+        id: globalCounter
+        varName: "counter"
+        defaultValue: 0
+    }
+
+    horizontalBarPill: Component {
+        StyledRect {
+            width: content.implicitWidth + Theme.spacingM * 2
+            height: parent.widgetThickness
+            radius: Theme.cornerRadius
+            color: Theme.surfaceContainerHigh
+
+            StyledText {
+                id: content
+                anchors.centerIn: parent
+                text: "Count: " + globalCounter.value
+                color: Theme.surfaceText
+            }
+
+            MouseArea {
+                anchors.fill: parent
+                onClicked: globalCounter.set(globalCounter.value + 1)
+            }
+        }
+    }
+}
+```
+
+**PluginGlobalVar Properties:**
+- `varName` (required): Name of the global variable
+- `defaultValue` (optional): Default value if not set
+- `value` (readonly): Current value of the global variable
+
+**PluginGlobalVar Methods:**
+- `set(newValue)`: Update the global variable (triggers reactivity across all instances)
+
+### Using PluginService API Directly
+
+For more control, use the PluginService API directly:
+
+```qml
+import QtQuick
+import qs.Services
+import qs.Modules.Plugins
+
+PluginComponent {
+    property int counter: PluginService.getGlobalVar("myPlugin", "counter", 0)
+
+    Connections {
+        target: PluginService
+        function onGlobalVarChanged(pluginId, varName) {
+            if (pluginId === "myPlugin" && varName === "counter") {
+                counter = PluginService.getGlobalVar("myPlugin", "counter", 0)
+            }
+        }
+    }
+
+    horizontalBarPill: Component {
+        StyledRect {
+            MouseArea {
+                anchors.fill: parent
+                onClicked: {
+                    const current = PluginService.getGlobalVar("myPlugin", "counter", 0)
+                    PluginService.setGlobalVar("myPlugin", "counter", current + 1)
+                }
+            }
+        }
+    }
+}
+```
+
+### Global Variables vs Settings
+
+**Global Variables** (`getGlobalVar`/`setGlobalVar`):
+- Runtime state only (not persisted to disk)
+- Synchronized across all plugin instances
+- Changes trigger `globalVarChanged` signal for reactivity
+- Use for: counters, current selection, temporary UI state
+
+**Settings** (`savePluginData`/`loadPluginData`):
+- Persisted to `settings.json` across sessions
+- Loaded once per plugin instance
+- Use for: user preferences, API keys, configuration
+
+### Important Notes
+
+1. **Reactivity**: Global variables are reactive - all instances update when a value changes
+2. **Namespacing**: Variables are namespaced by plugin ID to avoid conflicts
+3. **Type Safety**: Values can be any QML/JavaScript type (numbers, strings, objects, arrays)
+4. **Not Persistent**: Global variables are cleared when the shell restarts (use settings for persistence)
+5. **Performance**: Efficient for frequent updates - changes only trigger updates for the specific variable
 
 ## Creating a Plugin
 
@@ -534,9 +711,12 @@ Create `plugin.json`:
     "description": "A sample plugin",
     "version": "1.0.0",
     "author": "Your Name",
-    "icon": "extension",
+    "type": "widget",
+    "capabilities": ["my-functionality"],
     "component": "./MyWidget.qml",
+    "icon": "extension",
     "settings": "./MySettings.qml",
+    "requires_dms": ">=0.1.0",
     "permissions": ["settings_read", "settings_write"]
 }
 ```
@@ -669,6 +849,231 @@ Or edit `$CONFIGPATH/quickshell/dms/config.json`:
 8. **Versioning**: Use semantic versioning for updates
 9. **Dependencies**: Document external library requirements
 
+## Clipboard Access
+
+Plugins that need to copy text to the clipboard **must** use the Wayland clipboard utility `wl-copy` through Quickshell's `execDetached` function.
+
+### Correct Method
+
+Import Quickshell and use `execDetached` with `wl-copy`:
+
+```qml
+import QtQuick
+import Quickshell
+
+Item {
+    function copyToClipboard(text) {
+        Quickshell.execDetached(["sh", "-c", "echo -n '" + text + "' | wl-copy"])
+    }
+}
+```
+
+### Example Usage
+
+From the ExampleEmojiPlugin (EmojiWidget.qml:136):
+
+```qml
+MouseArea {
+    onClicked: {
+        Quickshell.execDetached(["sh", "-c", "echo -n '" + modelData + "' | wl-copy"])
+        ToastService.showInfo("Copied " + modelData + " to clipboard")
+        popoutColumn.closePopout()
+    }
+}
+```
+
+### Important Notes
+
+1. **Do NOT** use `globalThis.clipboard` or similar JavaScript APIs - they don't exist in the QML runtime
+2. **Always** import `Quickshell` at the top of your QML file
+3. **Use** `echo -n` to prevent adding a trailing newline to the clipboard content
+4. The `-c` flag for `sh` is required to execute the pipe command properly
+5. Consider showing a toast notification to confirm the copy action to users
+
+### Dependencies
+
+This method requires `wl-copy` from the `wl-clipboard` package, which is standard on Wayland systems.
+
+## Running External Commands
+
+Plugins that need to execute external commands and capture their output should use the `Proc` singleton, which provides debounced command execution with automatic cleanup.
+
+### Correct Method
+
+Import the `Proc` singleton from `qs.Common` and use `runCommand`:
+
+```qml
+import QtQuick
+import qs.Common
+
+Item {
+    function fetchData() {
+        Proc.runCommand(
+            "myPlugin.fetchData",
+            ["curl", "-s", "https://api.example.com/data"],
+            (stdout, exitCode) => {
+                if (exitCode === 0) {
+                    console.log("Success:", stdout)
+                    processData(stdout)
+                } else {
+                    console.error("Command failed with exit code:", exitCode)
+                }
+            },
+            100
+        )
+    }
+}
+```
+
+### Function Signature
+
+```qml
+Proc.runCommand(id, command, callback, debounceMs)
+```
+
+**Parameters:**
+- `id` (string): Unique identifier for this command. Used for debouncing - multiple calls with the same ID within the debounce window will only execute the last one
+- `command` (array): Command and arguments as an array (e.g., `["sh", "-c", "echo hello"]`)
+- `callback` (function): Callback function receiving `(stdout, exitCode)` when the command completes
+  - `stdout` (string): Captured standard output from the command
+  - `exitCode` (number): Exit code of the process (0 typically means success)
+- `debounceMs` (number, optional): Debounce delay in milliseconds. Defaults to 50ms if not specified
+
+### Key Features
+
+1. **Automatic Cleanup**: Process objects are automatically destroyed after completion
+2. **Debouncing**: Rapid successive calls with the same ID are debounced, only executing the last one
+3. **Output Capture**: Automatically captures stdout for processing
+4. **Error Handling**: Exit codes are passed to the callback for error detection
+
+### Example Usage
+
+#### Simple Command Execution
+
+```qml
+import QtQuick
+import qs.Common
+
+Item {
+    function checkNetwork() {
+        Proc.runCommand(
+            "myPlugin.ping",
+            ["ping", "-c", "1", "8.8.8.8"],
+            (output, exitCode) => {
+                if (exitCode === 0) {
+                    console.log("Network is up")
+                } else {
+                    console.log("Network is down")
+                }
+            }
+        )
+    }
+}
+```
+
+#### Parsing Command Output
+
+```qml
+import QtQuick
+import qs.Common
+
+Item {
+    property var diskUsage: ({})
+
+    function updateDiskUsage() {
+        Proc.runCommand(
+            "myPlugin.df",
+            ["df", "-h", "/home"],
+            (output, exitCode) => {
+                if (exitCode === 0) {
+                    const lines = output.trim().split("\n")
+                    if (lines.length > 1) {
+                        const parts = lines[1].split(/\s+/)
+                        diskUsage = {
+                            total: parts[1],
+                            used: parts[2],
+                            available: parts[3],
+                            percent: parts[4]
+                        }
+                    }
+                }
+            }
+        )
+    }
+}
+```
+
+#### Shell Commands with Pipes
+
+```qml
+import QtQuick
+import qs.Common
+
+Item {
+    function getTopProcess() {
+        Proc.runCommand(
+            "myPlugin.topProcess",
+            ["sh", "-c", "ps aux | sort -nrk 3,3 | head -n 1"],
+            (output, exitCode) => {
+                if (exitCode === 0) {
+                    console.log("Top process:", output)
+                }
+            }
+        )
+    }
+}
+```
+
+#### Debouncing Rapid Updates
+
+```qml
+import QtQuick
+import qs.Common
+import qs.Widgets
+
+Item {
+    DankTextField {
+        id: searchField
+        placeholderText: "Search files..."
+
+        onTextChanged: {
+            Proc.runCommand(
+                "myPlugin.search",
+                ["find", "/home", "-name", "*" + text + "*"],
+                (output, exitCode) => {
+                    if (exitCode === 0) {
+                        updateSearchResults(output)
+                    }
+                },
+                500
+            )
+        }
+    }
+}
+```
+
+### Important Notes
+
+1. **Unique IDs**: Use descriptive, namespaced IDs (e.g., `"myPlugin.actionName"`) to avoid conflicts
+2. **Debouncing**: Use appropriate debounce delays for your use case:
+   - Fast updates (50-100ms): System monitoring, real-time data
+   - User input (300-500ms): Search fields, text input processing
+   - Network requests (500-1000ms): API calls, web scraping
+3. **Error Handling**: Always check the exit code in your callback before processing output
+4. **Shell Commands**: Use `["sh", "-c", "command"]` for complex shell commands with pipes or redirects
+5. **Security**: Sanitize user input before passing to commands to prevent command injection
+6. **Performance**: Avoid running expensive commands too frequently - use debouncing wisely
+
+### Comparison with Other Methods
+
+**Proc.runCommand** vs **Quickshell.execDetached**:
+- Use `Proc.runCommand` when you need to capture output or check exit codes
+- Use `Quickshell.execDetached` for fire-and-forget operations (like clipboard copy)
+
+**Proc.runCommand** vs **Process component**:
+- Use `Proc.runCommand` for simple, one-off command executions with automatic cleanup
+- Use `Process` component for long-running processes or when you need fine-grained control
+
 ## Debugging
 
 ### Console Logging
@@ -731,12 +1136,325 @@ The plugin API is currently **experimental**. Breaking changes may occur in mino
 - Plugin update notifications
 - Inter-plugin communication
 
+## Launcher Plugins
+
+Launcher plugins extend the DMS application launcher by adding custom searchable items with trigger-based filtering.
+
+### Overview
+
+Launcher plugins enable you to:
+- Add custom items to the launcher/app drawer
+- Use trigger strings for quick filtering (e.g., `!`, `#`, `@`)
+- Execute custom actions when items are selected
+- Provide searchable, categorized content
+- Integrate seamlessly with the existing launcher
+
+### Plugin Type Configuration
+
+To create a launcher plugin, set the plugin type in `plugin.json`:
+
+```json
+{
+    "id": "myLauncher",
+    "name": "My Launcher Plugin",
+    "description": "A custom launcher plugin for quick actions",
+    "version": "1.0.0",
+    "author": "Your Name",
+    "type": "launcher",
+    "capabilities": ["show-thing"],
+    "component": "./MyLauncher.qml",
+    "trigger": "#",
+    "icon": "search",
+    "settings": "./MySettings.qml",
+    "requires_dms": ">=0.1.18",
+    "permissions": ["settings_read", "settings_write"]
+}
+```
+
+### Launcher Component Contract
+
+Create `MyLauncher.qml` with the following interface:
+
+```qml
+import QtQuick
+import qs.Services
+
+Item {
+    id: root
+
+    // Required properties
+    property var pluginService: null
+    property string trigger: "#"
+
+    // Required signals
+    signal itemsChanged()
+
+    // Required: Return array of launcher items
+    function getItems(query) {
+        return [
+            {
+                name: "Item Name",
+                icon: "icon_name",
+                comment: "Description",
+                action: "type:data",
+                categories: ["MyLauncher"]
+            }
+        ]
+    }
+
+    // Required: Execute item action
+    function executeItem(item) {
+        const [type, data] = item.action.split(":", 2)
+        // Handle action based on type
+    }
+
+    Component.onCompleted: {
+        if (pluginService) {
+            trigger = pluginService.loadPluginData("myLauncher", "trigger", "#")
+        }
+    }
+}
+```
+
+### Item Structure
+
+Each item returned by `getItems()` must include:
+
+- `name` (string): Display name shown in launcher
+- `icon` (string, optional): Icon specification (see Icon Types below)
+- `comment` (string): Description/subtitle text
+- `action` (string): Action identifier in `type:data` format
+- `categories` (array): Array containing your plugin name
+
+### Icon Types
+
+The `icon` field supports four formats:
+
+**1. Material Design Icons** - Use the `material:` prefix:
+```javascript
+{
+    name: "My Item",
+    icon: "material:lightbulb",  // Material Symbols Rounded font
+    comment: "Uses Material Design icon",
+    action: "toast:Hello!",
+    categories: ["MyPlugin"]
+}
+```
+Available icons: Any icon from Material Symbols font (e.g., `lightbulb`, `star`, `favorite`, `settings`, `terminal`, `translate`, `sentiment_satisfied`)
+
+**2. Unicode/Emoji Icons** - Use the `unicode:` prefix:
+```javascript
+{
+    name: "Grinning Face",
+    icon: "unicode:😀",  // Unicode character or emoji
+    comment: "Copy emoji to clipboard",
+    action: "copy:😀",
+    categories: ["MyPlugin"]
+}
+```
+Display any Unicode character or emoji as the icon. The character is rendered at 70-80% of the icon size with proper theming. Perfect for emoji pickers, symbol selectors, or character libraries.
+
+**3. Desktop Theme Icons** - Use icon name directly:
+```javascript
+{
+    name: "Firefox",
+    icon: "firefox",  // Uses system icon theme
+    comment: "Launches Firefox browser",
+    action: "exec:firefox",
+    categories: ["MyPlugin"]
+}
+```
+Uses the user's installed icon theme. Common examples: `firefox`, `chrome`, `folder`, `text-editor`
+
+**4. No Icon** - Omit the `icon` field entirely:
+```javascript
+{
+    name: "😀  Grinning Face",
+    // No icon field - emoji/unicode in name displays without icon area
+    comment: "Copy emoji to clipboard",
+    action: "copy:😀",
+    categories: ["MyPlugin"]
+}
+```
+When `icon` is omitted, the launcher hides the icon area and displays only the text, giving full width to the item name. Useful when you want emojis or symbols to be part of the item name itself.
+
+### Trigger System
+
+Triggers control when your plugin's items appear in the launcher:
+
+**Empty Trigger Mode** (No trigger):
+- Items always visible alongside regular apps
+- Search includes your items automatically
+- Configure by saving empty trigger: `trigger: ""`
+
+**Custom Trigger Mode**:
+- Items only appear when trigger is typed
+- Example: Type `#` to show only your plugin's items
+- Type `# query` to search within your plugin
+- Configure any string: `#`, `!`, `@`, `!custom`, etc.
+
+### Trigger Configuration in Settings
+
+Provide a settings component with trigger configuration:
+
+```qml
+import QtQuick
+import QtQuick.Controls
+import qs.Widgets
+
+FocusScope {
+    id: root
+
+    property var pluginService: null
+
+    Column {
+        spacing: 12
+
+        CheckBox {
+            id: noTriggerToggle
+            text: "No trigger (always show)"
+            checked: loadSettings("noTrigger", false)
+
+            onCheckedChanged: {
+                saveSettings("noTrigger", checked)
+                if (checked) {
+                    saveSettings("trigger", "")
+                } else {
+                    saveSettings("trigger", triggerField.text || "#")
+                }
+            }
+        }
+
+        DankTextField {
+            id: triggerField
+            visible: !noTriggerToggle.checked
+            text: loadSettings("trigger", "#")
+            placeholderText: "#"
+
+            onTextEdited: {
+                saveSettings("trigger", text || "#")
+            }
+        }
+    }
+
+    function saveSettings(key, value) {
+        if (pluginService) {
+            pluginService.savePluginData("myLauncher", key, value)
+        }
+    }
+
+    function loadSettings(key, defaultValue) {
+        if (pluginService) {
+            return pluginService.loadPluginData("myLauncher", key, defaultValue)
+        }
+        return defaultValue
+    }
+}
+```
+
+### Action Execution
+
+Handle different action types in `executeItem()`:
+
+```qml
+function executeItem(item) {
+    const actionParts = item.action.split(":")
+    const actionType = actionParts[0]
+    const actionData = actionParts.slice(1).join(":")
+
+    switch (actionType) {
+        case "toast":
+            if (typeof ToastService !== "undefined") {
+                ToastService.showInfo("Plugin", actionData)
+            }
+            break
+        case "copy":
+            // Copy to clipboard
+            break
+        case "script":
+            // Execute command
+            break
+        default:
+            console.warn("Unknown action:", actionType)
+    }
+}
+```
+
+### Search and Filtering
+
+The launcher automatically handles search when:
+
+**With empty trigger**:
+- Your items appear in all searches
+- No prefix needed
+
+**With custom trigger**:
+- Type trigger alone: Shows all your items
+- Type trigger + query: Filters your items by query
+- The query parameter is passed to your `getItems(query)` function
+
+Example `getItems()` implementation:
+
+```qml
+function getItems(query) {
+    const allItems = [
+        {name: "Item 1", ...},
+        {name: "Item 2", ...},
+        {name: "Test Item", ...}
+    ]
+
+    if (!query || query.length === 0) {
+        return allItems
+    }
+
+    const lowerQuery = query.toLowerCase()
+    return allItems.filter(item => {
+        return item.name.toLowerCase().includes(lowerQuery) ||
+               item.comment.toLowerCase().includes(lowerQuery)
+    })
+}
+```
+
+### Integration Flow
+
+1. User opens launcher
+2. If empty trigger: Your items appear alongside apps
+3. If custom trigger: User types trigger (e.g., `#`)
+4. Launcher calls `getItems(query)` on your plugin
+5. Your items displayed with your plugin's category
+6. User selects item and presses Enter
+7. Launcher calls `executeItem(item)` on your plugin
+
+### Best Practices
+
+1. **Unique Triggers**: Choose non-conflicting trigger strings
+2. **Fast Response**: Return results quickly from `getItems()`
+3. **Clear Names**: Use descriptive item names and comments
+4. **Error Handling**: Gracefully handle failures in `executeItem()`
+5. **Cleanup**: Destroy temporary objects after use
+6. **Empty Trigger Support**: Consider if your plugin benefits from always being visible
+
+### Example Plugin
+
+See `PLUGINS/LauncherExample/` for a complete working example demonstrating:
+- Trigger configuration (including empty trigger mode)
+- Multiple action types (toast, copy, script)
+- Search/filtering implementation
+- Settings integration
+- Proper error handling
+
 ## Resources
 
-- **Example Plugins**: [Emoji Picker](./ExampleEmojiPlugin/) [WorldClock](https://github.com/rochacbruno/WorldClock)
+- **Plugin Schema**: `plugin-schema.json` - JSON Schema for validation
+- **Example Plugins**:
+  - [Emoji Picker](./ExampleEmojiPlugin/)
+  - [WorldClock](https://github.com/rochacbruno/WorldClock)
+  - [LauncherExample](./LauncherExample/)
+  - [Calculator](https://github.com/rochacbruno/DankCalculator)
 - **PluginService**: `Services/PluginService.qml`
 - **Settings UI**: `Modules/Settings/PluginsTab.qml`
 - **DankBar Integration**: `Modules/DankBar/DankBar.qml`
+- **Launcher Integration**: `Modules/AppDrawer/AppLauncher.qml`
 - **Theme Reference**: `Common/Theme.qml`
 - **Widget Library**: `Widgets/`
 
@@ -745,7 +1463,8 @@ The plugin API is currently **experimental**. Breaking changes may occur in mino
 Share your plugins with the community:
 
 1. Create a public repository with your plugin
-2. Include comprehensive README.md
+2. Validate your `plugin.json` against `plugin-schema.json`
+3. Include comprehensive README.md
 4. Add example screenshots
 5. Document dependencies and permissions
 

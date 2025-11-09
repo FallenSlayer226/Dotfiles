@@ -14,14 +14,23 @@ Row {
     width: parent.width
     spacing: Theme.spacingM
 
-    Component.onCompleted: {
+    property bool isInitialized: false
+
+    function loadValue() {
         const settings = findSettings()
-        if (settings) {
-            value = settings.loadValue(settingKey, defaultValue)
+        if (settings && settings.pluginService) {
+            const loadedValue = settings.loadValue(settingKey, defaultValue)
+            value = loadedValue
+            isInitialized = true
         }
     }
 
+    Component.onCompleted: {
+        loadValue()
+    }
+
     onValueChanged: {
+        if (!isInitialized) return
         const settings = findSettings()
         if (settings) {
             settings.saveValue(settingKey, value)

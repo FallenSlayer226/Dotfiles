@@ -12,7 +12,7 @@ import qs.Widgets
 PanelWindow {
     id: win
 
-    WlrLayershell.namespace: "quickshell:notification"
+    WlrLayershell.namespace: "dms:notification-popup"
 
     required property var notificationData
     required property string notificationId
@@ -21,6 +21,7 @@ PanelWindow {
     property bool exiting: false
     property bool _isDestroying: false
     property bool _finalized: false
+    readonly property string clearText: I18n.tr("Dismiss")
 
     signal entered
     signal exitFinished
@@ -211,7 +212,7 @@ PanelWindow {
             anchors.fill: parent
             anchors.margins: 4
             radius: Theme.cornerRadius
-            color: Theme.popupBackground()
+            color: Theme.withAlpha(Theme.surfaceContainer, Theme.popupTransparency)
             border.color: notificationData && notificationData.urgency === NotificationUrgency.Critical ? Qt.rgba(Theme.primary.r, Theme.primary.g, Theme.primary.b, 0.3) : Qt.rgba(Theme.outline.r, Theme.outline.g, Theme.outline.b, 0.08)
             border.width: notificationData && notificationData.urgency === NotificationUrgency.Critical ? 2 : 0
             clip: true
@@ -316,10 +317,8 @@ PanelWindow {
                     }
 
                     hasImage: hasNotificationImage
-                    fallbackIcon: notificationData?.appIcon || "notifications"
+                    fallbackIcon: ""
                     fallbackText: {
-                        if (hasNotificationImage || (notificationData?.appIcon && notificationData.appIcon !== ""))
-                            return ""
                         const appName = notificationData?.appName || "?"
                         return appName.charAt(0).toUpperCase()
                     }
@@ -478,16 +477,16 @@ PanelWindow {
                 anchors.rightMargin: 16
                 anchors.bottom: parent.bottom
                 anchors.bottomMargin: 8
-                width: Math.max(clearText.implicitWidth + 12, 50)
+                width: Math.max(clearTextLabel.implicitWidth + 12, 50)
                 height: 24
                 radius: 4
                 color: isHovered ? Qt.rgba(Theme.primary.r, Theme.primary.g, Theme.primary.b, 0.1) : "transparent"
                 z: 20
 
                 StyledText {
-                    id: clearText
+                    id: clearTextLabel
 
-                    text: "Clear"
+                    text: win.clearText
                     color: clearButton.isHovered ? Theme.primary : Theme.surfaceVariantText
                     font.pixelSize: Theme.fontSizeSmall
                     font.weight: Font.Medium
@@ -513,7 +512,7 @@ PanelWindow {
 
                 anchors.fill: parent
                 hoverEnabled: true
-                acceptedButtons: Qt.LeftButton
+                acceptedButtons: Qt.LeftButton | Qt.RightButton
                 propagateComposedEvents: true
                 z: -1
                 onEntered: {
@@ -524,9 +523,20 @@ PanelWindow {
                     if (notificationData && notificationData.popup && notificationData.timer)
                         notificationData.timer.restart()
                 }
-                onClicked: {
-                    if (notificationData && !win.exiting)
-                        notificationData.popup = false
+                onClicked: (mouse) => {
+                    if (!notificationData || win.exiting)
+                        return
+
+                    if (mouse.button === Qt.RightButton) {
+                        NotificationService.dismissNotification(notificationData)
+                    } else if (mouse.button === Qt.LeftButton) {
+                        if (notificationData.actions && notificationData.actions.length > 0) {
+                            notificationData.actions[0].invoke()
+                            NotificationService.dismissNotification(notificationData)
+                        } else {
+                            notificationData.popup = false
+                        }
+                    }
                 }
             }
         }

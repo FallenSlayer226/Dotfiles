@@ -22,34 +22,34 @@ Rectangle {
     border.width: 1
 
     property var iconCategories: [{
-            "name": "Numbers",
+            "name": I18n.tr("Numbers"),
             "icons": ["looks_one", "looks_two", "looks_3", "looks_4", "looks_5", "looks_6", "filter_1", "filter_2", "filter_3", "filter_4", "filter_5", "filter_6", "filter_7", "filter_8", "filter_9", "filter_9_plus", "plus_one", "exposure_plus_1", "exposure_plus_2"]
         }, {
-            "name": "Workspace",
+            "name": I18n.tr("Workspace"),
             "icons": ["work", "laptop", "desktop_windows", "folder", "view_module", "dashboard", "apps", "grid_view"]
         }, {
-            "name": "Development",
+            "name": I18n.tr("Development"),
             "icons": ["code", "terminal", "bug_report", "build", "engineering", "integration_instructions", "data_object", "schema", "api", "webhook"]
         }, {
-            "name": "Communication",
+            "name": I18n.tr("Communication"),
             "icons": ["chat", "mail", "forum", "message", "video_call", "call", "contacts", "group", "notifications", "campaign"]
         }, {
-            "name": "Media",
+            "name": I18n.tr("Media"),
             "icons": ["music_note", "headphones", "mic", "videocam", "photo", "movie", "library_music", "album", "radio", "volume_up"]
         }, {
-            "name": "System",
+            "name": I18n.tr("System"),
             "icons": ["memory", "storage", "developer_board", "monitor", "keyboard", "mouse", "battery_std", "wifi", "bluetooth", "security", "settings"]
         }, {
-            "name": "Navigation",
+            "name": I18n.tr("Navigation"),
             "icons": ["home", "arrow_forward", "arrow_back", "expand_more", "expand_less", "menu", "close", "search", "filter_list", "sort"]
         }, {
-            "name": "Actions",
+            "name": I18n.tr("Actions"),
             "icons": ["add", "remove", "edit", "delete", "save", "download", "upload", "share", "content_copy", "content_paste", "content_cut", "undo", "redo"]
         }, {
-            "name": "Status",
+            "name": I18n.tr("Status"),
             "icons": ["check", "error", "warning", "info", "done", "pending", "schedule", "update", "sync", "offline_bolt"]
         }, {
-            "name": "Fun",
+            "name": I18n.tr("Fun"),
             "icons": ["celebration", "cake", "star", "favorite", "pets", "sports_esports", "local_fire_department", "bolt", "auto_awesome", "diamond"]
         }]
 
@@ -67,7 +67,7 @@ Rectangle {
         }
 
         StyledText {
-            text: root.currentIcon ? root.currentIcon : "Choose icon"
+            text: root.currentIcon ? root.currentIcon : I18n.tr("Choose icon")
             font.pixelSize: Theme.fontSizeSmall
             color: root.currentIcon ? Theme.surfaceText : Theme.outline
             anchors.verticalCenter: parent.verticalCenter

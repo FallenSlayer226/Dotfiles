@@ -72,10 +72,6 @@ Singleton {
         saveSettings()
     }
 
-    function getAppUsageRanking() {
-        return appUsageRanking
-    }
-
     function getRankedApps() {
         var apps = []
         for (var appId in appUsageRanking) {

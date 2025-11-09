@@ -13,8 +13,10 @@ Item {
     property var parentScreen: null
     property real widgetThickness: 30
     property real barThickness: 48
+    property bool overrideAxisLayout: false
+    property bool forceVerticalLayout: false
 
-    readonly property bool isVertical: axis?.isVertical ?? false
+    readonly property bool isVertical: overrideAxisLayout ? forceVerticalLayout : (axis?.isVertical ?? false)
     readonly property real spacing: noBackground ? 2 : Theme.spacingXS
 
     property var centerWidgets: []
@@ -308,8 +310,10 @@ Item {
         }
 
         // For plugin components, get from PluginService
-        let pluginMap = PluginService.getWidgetComponents()
-        return pluginMap[widgetId] || null
+        var parts = widgetId.split(":")
+        var pluginId = parts[0]
+        let pluginComponents = PluginService.getWidgetComponents()
+        return pluginComponents[pluginId] || null
     }
 
     height: parent.height
@@ -368,9 +372,6 @@ Item {
                 }
                 item.widthChanged.connect(() => layoutTimer.restart())
                 item.heightChanged.connect(() => layoutTimer.restart())
-                if (model.widgetId === "spacer") {
-                    item.spacerSize = Qt.binding(() => model.size || 20)
-                }
                 if (root.axis && "axis" in item) {
                     item.axis = Qt.binding(() => root.axis)
                 }
@@ -394,11 +395,60 @@ Item {
                 if ("barThickness" in item) {
                     item.barThickness = Qt.binding(() => root.barThickness)
                 }
+                if ("sectionSpacing" in item) {
+                    item.sectionSpacing = Qt.binding(() => root.spacing)
+                }
 
-                // Inject PluginService for plugin widgets
+                if ("isFirst" in item) {
+                    item.isFirst = Qt.binding(() => {
+                        for (var i = 0; i < centerRepeater.count; i++) {
+                            const checkItem = centerRepeater.itemAt(i)
+                            if (checkItem && checkItem.active && checkItem.item) {
+                                return checkItem.item === item
+                            }
+                        }
+                        return false
+                    })
+                }
+
+                if ("isLast" in item) {
+                    item.isLast = Qt.binding(() => {
+                        for (var i = centerRepeater.count - 1; i >= 0; i--) {
+                            const checkItem = centerRepeater.itemAt(i)
+                            if (checkItem && checkItem.active && checkItem.item) {
+                                return checkItem.item === item
+                            }
+                        }
+                        return false
+                    })
+                }
+
+                if ("isLeftBarEdge" in item) {
+                    item.isLeftBarEdge = false
+                }
+                if ("isRightBarEdge" in item) {
+                    item.isRightBarEdge = false
+                }
+                if ("isTopBarEdge" in item) {
+                    item.isTopBarEdge = false
+                }
+                if ("isBottomBarEdge" in item) {
+                    item.isBottomBarEdge = false
+                }
+
                 if (item.pluginService !== undefined) {
+                    var parts = model.widgetId.split(":")
+                    var pluginId = parts[0]
+                    var variantId = parts.length > 1 ? parts[1] : null
+
                     if (item.pluginId !== undefined) {
-                        item.pluginId = model.widgetId
+                        item.pluginId = pluginId
+                    }
+                    if (item.variantId !== undefined) {
+                        item.variantId = variantId
+                    }
+                    if (item.variantData !== undefined && variantId) {
+                        item.variantData = PluginService.getPluginVariantData(pluginId, variantId)
                     }
                     item.pluginService = PluginService
                 }
@@ -430,8 +480,8 @@ Item {
             // Force refresh of component lookups
             for (var i = 0; i < centerRepeater.count; i++) {
                 var item = centerRepeater.itemAt(i)
-                if (item && item.widgetId === pluginId) {
-                    item.sourceComponent = root.getWidgetComponent(pluginId)
+                if (item && item.widgetId.startsWith(pluginId)) {
+                    item.sourceComponent = root.getWidgetComponent(item.widgetId)
                 }
             }
         }
@@ -439,8 +489,8 @@ Item {
             // Force refresh of component lookups
             for (var i = 0; i < centerRepeater.count; i++) {
                 var item = centerRepeater.itemAt(i)
-                if (item && item.widgetId === pluginId) {
-                    item.sourceComponent = root.getWidgetComponent(pluginId)
+                if (item && item.widgetId.startsWith(pluginId)) {
+                    item.sourceComponent = root.getWidgetComponent(item.widgetId)
                 }
             }
         }

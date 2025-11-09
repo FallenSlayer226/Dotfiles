@@ -30,7 +30,7 @@ StyledRect {
     property color leftIconColor: Theme.surfaceVariantText
     property color leftIconFocusedColor: Theme.primary
     property bool showClearButton: false
-    property color backgroundColor: Qt.rgba(Theme.surfaceContainer.r, Theme.surfaceContainer.g, Theme.surfaceContainer.b, 0.9)
+    property color backgroundColor: Theme.withAlpha(Theme.surfaceContainer, Theme.popupTransparency)
     property color focusedBorderColor: Theme.primary
     property color normalBorderColor: Theme.outlineStrong
     property color placeholderColor: Theme.outlineButton
@@ -42,6 +42,7 @@ StyledRect {
     property real topPadding: Theme.spacingM
     property real bottomPadding: Theme.spacingM
     property bool ignoreLeftRightKeys: false
+    property bool ignoreTabKeys: false
     property var keyForwardTargets: []
     property Item keyNavigationTab: null
     property Item keyNavigationBacktab: null
@@ -109,7 +110,7 @@ StyledRect {
         onEditingFinished: root.editingFinished()
         onAccepted: root.accepted()
         onActiveFocusChanged: root.focusStateChanged(activeFocus)
-        Keys.forwardTo: root.ignoreLeftRightKeys ? root.keyForwardTargets : []
+        Keys.forwardTo: root.keyForwardTargets
         Keys.onLeftPressed: event => {
                                 if (root.ignoreLeftRightKeys) {
                                     event.accepted = true
@@ -122,10 +123,19 @@ StyledRect {
                                  if (root.ignoreLeftRightKeys) {
                                      event.accepted = true
                                  } else {
-                                     // Allow normal TextInput cursor movement
                                      event.accepted = false
                                  }
                              }
+        Keys.onPressed: event => {
+                            if (root.ignoreTabKeys && (event.key === Qt.Key_Tab || event.key === Qt.Key_Backtab)) {
+                                event.accepted = false
+                                for (var i = 0; i < root.keyForwardTargets.length; i++) {
+                                    if (root.keyForwardTargets[i]) {
+                                        root.keyForwardTargets[i].Keys.pressed(event)
+                                    }
+                                }
+                            }
+                        }
 
         MouseArea {
             anchors.fill: parent

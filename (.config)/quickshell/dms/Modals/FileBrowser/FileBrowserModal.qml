@@ -5,24 +5,33 @@ import QtQuick.Controls
 import Quickshell.Io
 import qs.Common
 import qs.Modals.Common
+import qs.Modals.FileBrowser
 import qs.Widgets
 
 DankModal {
     id: fileBrowserModal
 
+    layerNamespace: "dms:file-browser"
+
     property string homeDir: StandardPaths.writableLocation(StandardPaths.HomeLocation)
+    property string docsDir: StandardPaths.writableLocation(StandardPaths.DocumentsLocation)
+    property string musicDir: StandardPaths.writableLocation(StandardPaths.MusicLocation)
+    property string videosDir: StandardPaths.writableLocation(StandardPaths.MoviesLocation)
+    property string picsDir: StandardPaths.writableLocation(StandardPaths.PicturesLocation)
+    property string downloadDir: StandardPaths.writableLocation(StandardPaths.DownloadLocation)
+    property string desktopDir: StandardPaths.writableLocation(StandardPaths.DesktopLocation)
     property string currentPath: ""
     property var fileExtensions: ["*.*"]
     property alias filterExtensions: fileBrowserModal.fileExtensions
     property string browserTitle: "Select File"
     property string browserIcon: "folder_open"
-    property string browserType: "generic" // "wallpaper" or "profile" for last path memory
+    property string browserType: "generic"
     property bool showHiddenFiles: false
     property int selectedIndex: -1
     property bool keyboardNavigationActive: false
     property bool backButtonFocused: false
-    property bool saveMode: false // Enable save functionality
-    property string defaultFileName: "" // Default filename for save mode
+    property bool saveMode: false
+    property string defaultFileName: ""
     property int keyboardSelectionIndex: -1
     property bool keyboardSelectionRequested: false
     property bool showKeyboardHints: false
@@ -32,11 +41,67 @@ DankModal {
     property bool selectedFileIsDir: false
     property bool showOverwriteConfirmation: false
     property string pendingFilePath: ""
-    property bool weAvailable: false
-    property string wePath: ""
-    property bool weMode: false
+    property var parentModal: null
+    property bool showSidebar: true
+    property string viewMode: "grid"
+    property string sortBy: "name"
+    property bool sortAscending: true
+    property int iconSizeIndex: 1
+    property var iconSizes: [80, 120, 160, 200]
+    property bool pathEditMode: false
+    property bool pathInputHasFocus: false
+    property int actualGridColumns: 5
+    property bool _initialized: false
 
     signal fileSelected(string path)
+
+    function loadSettings() {
+        const type = browserType || "default"
+        const settings = CacheData.fileBrowserSettings[type]
+        const isImageBrowser = ["wallpaper", "profile"].includes(browserType)
+
+        if (settings) {
+            viewMode = settings.viewMode || (isImageBrowser ? "grid" : "list")
+            sortBy = settings.sortBy || "name"
+            sortAscending = settings.sortAscending !== undefined ? settings.sortAscending : true
+            iconSizeIndex = settings.iconSizeIndex !== undefined ? settings.iconSizeIndex : 1
+            showSidebar = settings.showSidebar !== undefined ? settings.showSidebar : true
+        } else {
+            viewMode = isImageBrowser ? "grid" : "list"
+        }
+    }
+
+    function saveSettings() {
+        if (!_initialized)
+            return
+
+        const type = browserType || "default"
+        let settings = CacheData.fileBrowserSettings
+        if (!settings[type]) {
+            settings[type] = {}
+        }
+        settings[type].viewMode = viewMode
+        settings[type].sortBy = sortBy
+        settings[type].sortAscending = sortAscending
+        settings[type].iconSizeIndex = iconSizeIndex
+        settings[type].showSidebar = showSidebar
+        settings[type].lastPath = currentPath
+        CacheData.fileBrowserSettings = settings
+
+        if (browserType === "wallpaper") {
+            CacheData.wallpaperLastPath = currentPath
+        } else if (browserType === "profile") {
+            CacheData.profileLastPath = currentPath
+        }
+
+        CacheData.saveCache()
+    }
+
+    onViewModeChanged: saveSettings()
+    onSortByChanged: saveSettings()
+    onSortAscendingChanged: saveSettings()
+    onIconSizeIndexChanged: saveSettings()
+    onShowSidebarChanged: saveSettings()
 
     function isImageFile(fileName) {
         if (!fileName) {
@@ -47,15 +112,26 @@ DankModal {
     }
 
     function getLastPath() {
-        const lastPath = browserType === "wallpaper" ? SessionData.wallpaperLastPath : browserType === "profile" ? SessionData.profileLastPath : ""
+        const type = browserType || "default"
+        const settings = CacheData.fileBrowserSettings[type]
+        const lastPath = settings?.lastPath || ""
         return (lastPath && lastPath !== "") ? lastPath : homeDir
     }
 
     function saveLastPath(path) {
+        const type = browserType || "default"
+        let settings = CacheData.fileBrowserSettings
+        if (!settings[type]) {
+            settings[type] = {}
+        }
+        settings[type].lastPath = path
+        CacheData.fileBrowserSettings = settings
+        CacheData.saveCache()
+
         if (browserType === "wallpaper") {
-            SessionData.setWallpaperLastPath(path)
+            CacheData.wallpaperLastPath = path
         } else if (browserType === "profile") {
-            SessionData.setProfileLastPath(path)
+            CacheData.profileLastPath = path
         }
     }
 
@@ -103,23 +179,21 @@ DankModal {
     }
 
     function handleSaveFile(filePath) {
-        // Ensure the filePath has the correct file:// protocol format
         var normalizedPath = filePath
         if (!normalizedPath.startsWith("file://")) {
             normalizedPath = "file://" + filePath
         }
-        
-        // Check if file exists by looking through the folder model
+
         var exists = false
         var fileName = filePath.split('/').pop()
-        
+
         for (var i = 0; i < folderModel.count; i++) {
             if (folderModel.get(i, "fileName") === fileName && !folderModel.get(i, "fileIsDir")) {
                 exists = true
                 break
             }
         }
-        
+
         if (exists) {
             pendingFilePath = normalizedPath
             showOverwriteConfirmation = true
@@ -131,44 +205,43 @@ DankModal {
 
     objectName: "fileBrowserModal"
     allowStacking: true
+    closeOnEscapeKey: false
+    shouldHaveFocus: shouldBeVisible
     Component.onCompleted: {
+        loadSettings()
         currentPath = getLastPath()
+        _initialized = true
     }
-    
-    property var steamPaths: [
-        StandardPaths.writableLocation(StandardPaths.HomeLocation) + "/.steam/steam/steamapps/workshop/content/431960",
-        StandardPaths.writableLocation(StandardPaths.HomeLocation) + "/.local/share/Steam/steamapps/workshop/content/431960",
-        StandardPaths.writableLocation(StandardPaths.HomeLocation) + "/.var/app/com.valvesoftware.Steam/.local/share/Steam/steamapps/workshop/content/431960",
-        StandardPaths.writableLocation(StandardPaths.HomeLocation) + "/snap/steam/common/.local/share/Steam/steamapps/workshop/content/431960"
-    ]
+
+    property var steamPaths: [StandardPaths.writableLocation(StandardPaths.HomeLocation) + "/.steam/steam/steamapps/workshop/content/431960", StandardPaths.writableLocation(
+            StandardPaths.HomeLocation) + "/.local/share/Steam/steamapps/workshop/content/431960", StandardPaths.writableLocation(
+            StandardPaths.HomeLocation) + "/.var/app/com.valvesoftware.Steam/.local/share/Steam/steamapps/workshop/content/431960", StandardPaths.writableLocation(
+            StandardPaths.HomeLocation) + "/snap/steam/common/.local/share/Steam/steamapps/workshop/content/431960"]
     property int currentPathIndex: 0
-    
-    function discoverWallpaperEngine() {
-        currentPathIndex = 0
-        checkNextPath()
-    }
-    
-    function checkNextPath() {
-        if (currentPathIndex >= steamPaths.length) {
-            return
-        }
-        
-        const wePath = steamPaths[currentPathIndex]
-        const cleanPath = wePath.replace(/^file:\/\//, '')
-        weDiscoveryProcess.command = ["test", "-d", cleanPath]
-        weDiscoveryProcess.wePath = wePath
-        weDiscoveryProcess.running = true
-    }
+
     width: 800
     height: 600
     enableShadow: true
     visible: false
     onBackgroundClicked: close()
     onOpened: {
-        modalFocusScope.forceActiveFocus()
+        if (parentModal) {
+            parentModal.shouldHaveFocus = false
+            parentModal.allowFocusOverride = true
+        }
+        Qt.callLater(() => {
+                         if (contentLoader && contentLoader.item) {
+                             contentLoader.item.forceActiveFocus()
+                         }
+                     })
     }
-    modalFocusScope.Keys.onPressed: function (event) {
-        keyboardController.handleKey(event)
+    onDialogClosed: {
+        if (parentModal) {
+            parentModal.allowFocusOverride = false
+            parentModal.shouldHaveFocus = Qt.binding(() => {
+                                                         return parentModal.shouldBeVisible
+                                                     })
+        }
     }
     onVisibleChanged: {
         if (visible) {
@@ -176,15 +249,13 @@ DankModal {
             selectedIndex = -1
             keyboardNavigationActive = false
             backButtonFocused = false
-            if (browserType === "wallpaper" && !weAvailable) {
-                discoverWallpaperEngine()
-            }
         }
     }
     onCurrentPathChanged: {
         selectedFilePath = ""
         selectedFileName = ""
         selectedFileIsDir = false
+        saveSettings()
     }
     onSelectedIndexChanged: {
         if (selectedIndex >= 0 && folderModel && selectedIndex < folderModel.count) {
@@ -204,13 +275,58 @@ DankModal {
         showFiles: true
         showDirs: true
         folder: currentPath ? "file://" + currentPath : "file://" + homeDir
+        sortField: {
+            switch (sortBy) {
+            case "name":
+                return FolderListModel.Name
+            case "size":
+                return FolderListModel.Size
+            case "modified":
+                return FolderListModel.Time
+            case "type":
+                return FolderListModel.Type
+            default:
+                return FolderListModel.Name
+            }
+        }
+        sortReversed: !sortAscending
     }
+
+    property var quickAccessLocations: [{
+            "name": "Home",
+            "path": homeDir,
+            "icon": "home"
+        }, {
+            "name": "Documents",
+            "path": docsDir,
+            "icon": "description"
+        }, {
+            "name": "Downloads",
+            "path": downloadDir,
+            "icon": "download"
+        }, {
+            "name": "Pictures",
+            "path": picsDir,
+            "icon": "image"
+        }, {
+            "name": "Music",
+            "path": musicDir,
+            "icon": "music_note"
+        }, {
+            "name": "Videos",
+            "path": videosDir,
+            "icon": "movie"
+        }, {
+            "name": "Desktop",
+            "path": desktopDir,
+            "icon": "computer"
+        }]
 
     QtObject {
         id: keyboardController
 
         property int totalItems: folderModel.count
-        property int gridColumns: 5
+        property int gridColumns: viewMode === "list" ? 1 : Math.max(1, actualGridColumns)
 
         function handleKey(event) {
             if (event.key === Qt.Key_Escape) {
@@ -218,19 +334,16 @@ DankModal {
                 event.accepted = true
                 return
             }
-            // F10 toggles keyboard hints
             if (event.key === Qt.Key_F10) {
                 showKeyboardHints = !showKeyboardHints
                 event.accepted = true
                 return
             }
-            // F1 or I key for file information
             if (event.key === Qt.Key_F1 || event.key === Qt.Key_I) {
                 showFileInfo = !showFileInfo
                 event.accepted = true
                 return
             }
-            // Alt+Left or Backspace to go back
             if ((event.modifiers & Qt.AltModifier && event.key === Qt.Key_Left) || event.key === Qt.Key_Backspace) {
                 if (currentPath !== homeDir) {
                     navigateUp()
@@ -239,10 +352,8 @@ DankModal {
                 return
             }
             if (!keyboardNavigationActive) {
-                const isInitKey = event.key === Qt.Key_Tab || event.key === Qt.Key_Down || event.key === Qt.Key_Right ||
-                                  (event.key === Qt.Key_N && event.modifiers & Qt.ControlModifier) ||
-                                  (event.key === Qt.Key_J && event.modifiers & Qt.ControlModifier) ||
-                                  (event.key === Qt.Key_L && event.modifiers & Qt.ControlModifier)
+                const isInitKey = event.key === Qt.Key_Tab || event.key === Qt.Key_Down || event.key
+                                === Qt.Key_Right || (event.key === Qt.Key_N && event.modifiers & Qt.ControlModifier) || (event.key === Qt.Key_J && event.modifiers & Qt.ControlModifier) || (event.key === Qt.Key_L && event.modifiers & Qt.ControlModifier)
 
                 if (isInitKey) {
                     keyboardNavigationActive = true
@@ -350,6 +461,8 @@ DankModal {
                 }
                 break
             case Qt.Key_Left:
+                if (pathInputHasFocus)
+                    return
                 if (backButtonFocused)
                     return
 
@@ -362,6 +475,9 @@ DankModal {
                 event.accepted = true
                 break
             case Qt.Key_Right:
+                if (pathInputHasFocus)
+                    return
+
                 if (backButtonFocused) {
                     backButtonFocused = false
                     selectedIndex = 0
@@ -373,14 +489,17 @@ DankModal {
             case Qt.Key_Up:
                 if (backButtonFocused) {
                     backButtonFocused = false
-                    // Go to first row, appropriate column
-                    var col = selectedIndex % gridColumns
-                    selectedIndex = Math.min(col, totalItems - 1)
+                    if (gridColumns === 1) {
+                        selectedIndex = 0
+                    } else {
+                        var col = selectedIndex % gridColumns
+                        selectedIndex = Math.min(col, totalItems - 1)
+                    }
                 } else if (selectedIndex >= gridColumns) {
-                    // Move up one row
                     selectedIndex -= gridColumns
+                } else if (selectedIndex > 0 && gridColumns === 1) {
+                    selectedIndex--
                 } else if (currentPath !== homeDir) {
-                    // At top row, go to back button
                     backButtonFocused = true
                     selectedIndex = -1
                 }
@@ -390,13 +509,15 @@ DankModal {
                 if (backButtonFocused) {
                     backButtonFocused = false
                     selectedIndex = 0
+                } else if (gridColumns === 1) {
+                    if (selectedIndex < totalItems - 1) {
+                        selectedIndex++
+                    }
                 } else {
-                    // Move down one row if possible
                     var newIndex = selectedIndex + gridColumns
                     if (newIndex < totalItems) {
                         selectedIndex = newIndex
                     } else {
-                        // If can't go down a full row, go to last item in the column if exists
                         var lastRowStart = Math.floor((totalItems - 1) / gridColumns) * gridColumns
                         var col = selectedIndex % gridColumns
                         var targetIndex = lastRowStart + col
@@ -413,7 +534,6 @@ DankModal {
                 if (backButtonFocused)
                     navigateUp()
                 else if (selectedIndex >= 0 && selectedIndex < totalItems)
-                    // Trigger selection by setting the grid's current index and using signal
                     fileBrowserModal.keyboardFileSelection(selectedIndex)
                 event.accepted = true
                 break
@@ -428,26 +548,7 @@ DankModal {
 
         interval: 1
         onTriggered: {
-            // Access the currently selected item through model role names
-            // This will work because QML models expose role data
             executeKeyboardSelection(targetIndex)
-        }
-    }
-    
-    Process {
-        id: weDiscoveryProcess
-        
-        property string wePath: ""
-        running: false
-        
-        onExited: exitCode => {
-            if (exitCode === 0) {
-                fileBrowserModal.weAvailable = true
-                fileBrowserModal.wePath = wePath
-            } else {
-                currentPathIndex++
-                checkNextPath()
-            }
         }
     }
 
@@ -455,18 +556,29 @@ DankModal {
         Item {
             anchors.fill: parent
 
+            Keys.onPressed: event => {
+                                keyboardController.handleKey(event)
+                            }
+
+            onVisibleChanged: {
+                if (visible) {
+                    forceActiveFocus()
+                }
+            }
+
             Column {
                 anchors.fill: parent
-                anchors.margins: Theme.spacingM
-                spacing: Theme.spacingS
+                spacing: 0
 
                 Item {
                     width: parent.width
-                    height: 40
+                    height: 48
 
                     Row {
                         spacing: Theme.spacingM
                         anchors.verticalCenter: parent.verticalCenter
+                        anchors.left: parent.left
+                        anchors.leftMargin: Theme.spacingL
 
                         DankIcon {
                             name: browserIcon
@@ -486,25 +598,35 @@ DankModal {
 
                     Row {
                         anchors.right: parent.right
+                        anchors.rightMargin: Theme.spacingM
                         anchors.verticalCenter: parent.verticalCenter
                         spacing: Theme.spacingS
 
                         DankActionButton {
                             circular: false
-                            iconName: "movie"
+                            iconName: showHiddenFiles ? "visibility_off" : "visibility"
                             iconSize: Theme.iconSize - 4
-                            iconColor: weMode ? Theme.primary : Theme.surfaceText
-                            visible: weAvailable && browserType === "wallpaper"
-                            onClicked: {
-                                weMode = !weMode
-                                if (weMode) {
-                                    navigateTo(wePath)
-                                } else {
-                                    navigateTo(getLastPath())
-                                }
-                            }
+                            iconColor: showHiddenFiles ? Theme.primary : Theme.surfaceText
+                            onClicked: showHiddenFiles = !showHiddenFiles
                         }
-                        
+
+                        DankActionButton {
+                            circular: false
+                            iconName: viewMode === "grid" ? "view_list" : "grid_view"
+                            iconSize: Theme.iconSize - 4
+                            iconColor: Theme.surfaceText
+                            onClicked: viewMode = viewMode === "grid" ? "list" : "grid"
+                        }
+
+                        DankActionButton {
+                            circular: false
+                            iconName: iconSizeIndex === 0 ? "photo_size_select_small" : iconSizeIndex === 1 ? "photo_size_select_large" : iconSizeIndex === 2 ? "photo_size_select_actual" : "zoom_in"
+                            iconSize: Theme.iconSize - 4
+                            iconColor: Theme.surfaceText
+                            visible: viewMode === "grid"
+                            onClicked: iconSizeIndex = (iconSizeIndex + 1) % iconSizes.length
+                        }
+
                         DankActionButton {
                             circular: false
                             iconName: "info"
@@ -523,451 +645,288 @@ DankModal {
                     }
                 }
 
-                Row {
+                StyledRect {
                     width: parent.width
-                    spacing: Theme.spacingS
-
-                    StyledRect {
-                        width: 32
-                        height: 32
-                        radius: Theme.cornerRadius
-                        color: (backButtonMouseArea.containsMouse || (backButtonFocused && keyboardNavigationActive)) && currentPath !== homeDir ? Theme.surfaceVariant : "transparent"
-                        opacity: currentPath !== homeDir ? 1 : 0
-
-                        DankIcon {
-                            anchors.centerIn: parent
-                            name: "arrow_back"
-                            size: Theme.iconSizeSmall
-                            color: Theme.surfaceText
-                        }
-
-                        MouseArea {
-                            id: backButtonMouseArea
-
-                            anchors.fill: parent
-                            hoverEnabled: currentPath !== homeDir
-                            cursorShape: currentPath !== homeDir ? Qt.PointingHandCursor : Qt.ArrowCursor
-                            enabled: currentPath !== homeDir
-                            onClicked: navigateUp()
-                        }
-                    }
-
-                    StyledText {
-                        text: fileBrowserModal.currentPath.replace("file://", "")
-                        font.pixelSize: Theme.fontSizeMedium
-                        color: Theme.surfaceText
-                        font.weight: Font.Medium
-                        width: parent.width - 40 - Theme.spacingS
-                        elide: Text.ElideMiddle
-                        anchors.verticalCenter: parent.verticalCenter
-                        maximumLineCount: 1
-                        wrapMode: Text.NoWrap
-                    }
+                    height: 1
+                    color: Theme.outline
                 }
 
-                DankGridView {
-                    id: fileGrid
-
+                Item {
                     width: parent.width
-                    height: parent.height - 80
-                    clip: true
-                    cellWidth: weMode ? 255 : 150
-                    cellHeight: weMode ? 215 : 130
-                    cacheBuffer: 260
-                    model: folderModel
-                    currentIndex: selectedIndex
-                    onCurrentIndexChanged: {
-                        if (keyboardNavigationActive && currentIndex >= 0)
-                            positionViewAtIndex(currentIndex, GridView.Contain)
-                    }
+                    height: parent.height - 49
 
-                    ScrollBar.vertical: ScrollBar {
-                        policy: ScrollBar.AsNeeded
-                    }
+                    Row {
+                        anchors.fill: parent
+                        spacing: 0
 
-                    ScrollBar.horizontal: ScrollBar {
-                        policy: ScrollBar.AlwaysOff
-                    }
+                        Row {
+                            width: showSidebar ? 201 : 0
+                            height: parent.height
+                            spacing: 0
+                            visible: showSidebar
 
-                    delegate: StyledRect {
-                        id: delegateRoot
-
-                        required property bool fileIsDir
-                        required property string filePath
-                        required property string fileName
-                        required property int index
-
-                        width: weMode ? 245 : 140
-                        height: weMode ? 205 : 120
-                        radius: Theme.cornerRadius
-                        color: {
-                            if (keyboardNavigationActive && delegateRoot.index === selectedIndex)
-                                return Theme.surfacePressed
-
-                            return mouseArea.containsMouse ? Theme.surfaceVariant : "transparent"
-                        }
-                        border.color: keyboardNavigationActive && delegateRoot.index === selectedIndex ? Theme.primary : Theme.outline
-                        border.width: (mouseArea.containsMouse || (keyboardNavigationActive && delegateRoot.index === selectedIndex)) ? 1 : 0
-                        // Update file info when this item gets selected via keyboard or initially
-                        Component.onCompleted: {
-                            if (keyboardNavigationActive && delegateRoot.index === selectedIndex)
-                                setSelectedFileData(delegateRoot.filePath, delegateRoot.fileName, delegateRoot.fileIsDir)
-                        }
-
-                        // Watch for selectedIndex changes to update file info during keyboard navigation
-                        Connections {
-                            function onSelectedIndexChanged() {
-                                if (keyboardNavigationActive && selectedIndex === delegateRoot.index)
-                                    setSelectedFileData(delegateRoot.filePath, delegateRoot.fileName, delegateRoot.fileIsDir)
+                            FileBrowserSidebar {
+                                height: parent.height
+                                quickAccessLocations: fileBrowserModal.quickAccessLocations
+                                currentPath: fileBrowserModal.currentPath
+                                onLocationSelected: path => navigateTo(path)
                             }
 
-                            target: fileBrowserModal
+                            StyledRect {
+                                width: 1
+                                height: parent.height
+                                color: Theme.outline
+                            }
                         }
 
                         Column {
-                            anchors.centerIn: parent
-                            spacing: Theme.spacingXS
+                            width: parent.width - (showSidebar ? 201 : 0)
+                            height: parent.height
+                            spacing: 0
+
+                            FileBrowserNavigation {
+                                width: parent.width
+                                currentPath: fileBrowserModal.currentPath
+                                homeDir: fileBrowserModal.homeDir
+                                backButtonFocused: fileBrowserModal.backButtonFocused
+                                keyboardNavigationActive: fileBrowserModal.keyboardNavigationActive
+                                showSidebar: fileBrowserModal.showSidebar
+                                pathEditMode: fileBrowserModal.pathEditMode
+                                onNavigateUp: fileBrowserModal.navigateUp()
+                                onNavigateTo: path => fileBrowserModal.navigateTo(path)
+                                onPathInputFocusChanged: hasFocus => {
+                                                             fileBrowserModal.pathInputHasFocus = hasFocus
+                                                             if (hasFocus) {
+                                                                 fileBrowserModal.pathEditMode = true
+                                                             }
+                                                         }
+                            }
+
+                            StyledRect {
+                                width: parent.width
+                                height: 1
+                                color: Theme.outline
+                            }
 
                             Item {
-                                width: weMode ? 225 : 80
-                                height: weMode ? 165 : 60
-                                anchors.horizontalCenter: parent.horizontalCenter
+                                id: gridContainer
+                                width: parent.width
+                                height: parent.height - 41
+                                clip: true
 
-                                CachingImage {
+                                property real gridCellWidth: iconSizes[iconSizeIndex] + 24
+                                property real gridCellHeight: iconSizes[iconSizeIndex] + 56
+                                property real availableGridWidth: width - Theme.spacingM * 2
+                                property int gridColumns: Math.max(1, Math.floor(availableGridWidth / gridCellWidth))
+                                property real gridLeftMargin: Theme.spacingM + Math.max(0, (availableGridWidth - (gridColumns * gridCellWidth)) / 2)
+
+                                onGridColumnsChanged: {
+                                    fileBrowserModal.actualGridColumns = gridColumns
+                                }
+                                Component.onCompleted: {
+                                    fileBrowserModal.actualGridColumns = gridColumns
+                                }
+
+                                DankGridView {
+                                    id: fileGrid
                                     anchors.fill: parent
-                                    property var weExtensions: [".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp", ".tga"]
-                                    property int weExtIndex: 0
-                                    source: {
-                                        if (weMode && delegateRoot.fileIsDir) {
-                                            return "file://" + delegateRoot.filePath + "/preview" + weExtensions[weExtIndex]
-                                        }
-                                        return (!delegateRoot.fileIsDir && isImageFile(delegateRoot.fileName)) ? ("file://" + delegateRoot.filePath) : ""
+                                    anchors.leftMargin: gridContainer.gridLeftMargin
+                                    anchors.rightMargin: Theme.spacingM
+                                    anchors.topMargin: Theme.spacingS
+                                    anchors.bottomMargin: Theme.spacingS
+                                    visible: viewMode === "grid"
+                                    cellWidth: gridContainer.gridCellWidth
+                                    cellHeight: gridContainer.gridCellHeight
+                                    cacheBuffer: 260
+                                    model: folderModel
+                                    currentIndex: selectedIndex
+                                    onCurrentIndexChanged: {
+                                        if (keyboardNavigationActive && currentIndex >= 0)
+                                            positionViewAtIndex(currentIndex, GridView.Contain)
                                     }
-                                    onStatusChanged: {
-                                        if (weMode && delegateRoot.fileIsDir && status === Image.Error) {
-                                            if (weExtIndex < weExtensions.length - 1) {
-                                                weExtIndex++
-                                                source = "file://" + delegateRoot.filePath + "/preview" + weExtensions[weExtIndex]
-                                            } else {
-                                                source = ""
+
+                                    ScrollBar.vertical: DankScrollbar {
+                                        id: gridScrollbar
+                                    }
+
+                                    ScrollBar.horizontal: ScrollBar {
+                                        policy: ScrollBar.AlwaysOff
+                                    }
+
+                                    delegate: FileBrowserGridDelegate {
+                                        iconSizes: fileBrowserModal.iconSizes
+                                        iconSizeIndex: fileBrowserModal.iconSizeIndex
+                                        selectedIndex: fileBrowserModal.selectedIndex
+                                        keyboardNavigationActive: fileBrowserModal.keyboardNavigationActive
+                                        onItemClicked: (index, path, name, isDir) => {
+                                                           selectedIndex = index
+                                                           setSelectedFileData(path, name, isDir)
+                                                           if (isDir) {
+                                                               navigateTo(path)
+                                                           } else {
+                                                               fileSelected(path)
+                                                               fileBrowserModal.close()
+                                                           }
+                                                       }
+                                        onItemSelected: (index, path, name, isDir) => {
+                                                            setSelectedFileData(path, name, isDir)
+                                                        }
+
+                                        Connections {
+                                            function onKeyboardSelectionRequestedChanged() {
+                                                if (fileBrowserModal.keyboardSelectionRequested && fileBrowserModal.keyboardSelectionIndex === index) {
+                                                    fileBrowserModal.keyboardSelectionRequested = false
+                                                    selectedIndex = index
+                                                    setSelectedFileData(filePath, fileName, fileIsDir)
+                                                    if (fileIsDir) {
+                                                        navigateTo(filePath)
+                                                    } else {
+                                                        fileSelected(filePath)
+                                                        fileBrowserModal.close()
+                                                    }
+                                                }
                                             }
+
+                                            target: fileBrowserModal
                                         }
                                     }
-                                    fillMode: Image.PreserveAspectCrop
-                                    visible: (!delegateRoot.fileIsDir && isImageFile(delegateRoot.fileName)) || (weMode && delegateRoot.fileIsDir)
-                                    maxCacheSize: weMode ? 225 : 80
                                 }
 
-                                DankIcon {
-                                    anchors.centerIn: parent
-                                    name: "description"
-                                    size: Theme.iconSizeLarge
-                                    color: Theme.primary
-                                    visible: !delegateRoot.fileIsDir && !isImageFile(delegateRoot.fileName)
-                                }
+                                DankListView {
+                                    id: fileList
+                                    anchors.fill: parent
+                                    anchors.leftMargin: Theme.spacingM
+                                    anchors.rightMargin: Theme.spacingM
+                                    anchors.topMargin: Theme.spacingS
+                                    anchors.bottomMargin: Theme.spacingS
+                                    visible: viewMode === "list"
+                                    spacing: 2
+                                    model: folderModel
+                                    currentIndex: selectedIndex
+                                    onCurrentIndexChanged: {
+                                        if (keyboardNavigationActive && currentIndex >= 0)
+                                            positionViewAtIndex(currentIndex, ListView.Contain)
+                                    }
 
-                                DankIcon {
-                                    anchors.centerIn: parent
-                                    name: "folder"
-                                    size: Theme.iconSizeLarge
-                                    color: Theme.primary
-                                    visible: delegateRoot.fileIsDir && !weMode
-                                }
-                            }
+                                    ScrollBar.vertical: DankScrollbar {
+                                        id: listScrollbar
+                                    }
 
-                            StyledText {
-                                text: delegateRoot.fileName || ""
-                                font.pixelSize: Theme.fontSizeSmall
-                                color: Theme.surfaceText
-                                width: 120
-                                elide: Text.ElideMiddle
-                                horizontalAlignment: Text.AlignHCenter
-                                anchors.horizontalCenter: parent.horizontalCenter
-                                maximumLineCount: 2
-                                wrapMode: Text.WordWrap
-                            }
-                        }
+                                    delegate: FileBrowserListDelegate {
+                                        width: fileList.width
+                                        selectedIndex: fileBrowserModal.selectedIndex
+                                        keyboardNavigationActive: fileBrowserModal.keyboardNavigationActive
+                                        onItemClicked: (index, path, name, isDir) => {
+                                                           selectedIndex = index
+                                                           setSelectedFileData(path, name, isDir)
+                                                           if (isDir) {
+                                                               navigateTo(path)
+                                                           } else {
+                                                               fileSelected(path)
+                                                               fileBrowserModal.close()
+                                                           }
+                                                       }
+                                        onItemSelected: (index, path, name, isDir) => {
+                                                            setSelectedFileData(path, name, isDir)
+                                                        }
 
-                        MouseArea {
-                            id: mouseArea
+                                        Connections {
+                                            function onKeyboardSelectionRequestedChanged() {
+                                                if (fileBrowserModal.keyboardSelectionRequested && fileBrowserModal.keyboardSelectionIndex === index) {
+                                                    fileBrowserModal.keyboardSelectionRequested = false
+                                                    selectedIndex = index
+                                                    setSelectedFileData(filePath, fileName, fileIsDir)
+                                                    if (fileIsDir) {
+                                                        navigateTo(filePath)
+                                                    } else {
+                                                        fileSelected(filePath)
+                                                        fileBrowserModal.close()
+                                                    }
+                                                }
+                                            }
 
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: {
-                                // Update selected file info and index first
-                                selectedIndex = delegateRoot.index
-                                setSelectedFileData(delegateRoot.filePath, delegateRoot.fileName, delegateRoot.fileIsDir)
-                                if (weMode && delegateRoot.fileIsDir) {
-                                    var sceneId = delegateRoot.filePath.split("/").pop()
-                                    fileSelected("we:" + sceneId)
-                                    fileBrowserModal.close()
-                                } else if (delegateRoot.fileIsDir) {
-                                    navigateTo(delegateRoot.filePath)
-                                } else {
-                                    fileSelected(delegateRoot.filePath)
-                                    fileBrowserModal.close()
-                                }
-                            }
-                        }
-
-                        // Handle keyboard selection
-                        Connections {
-                            function onKeyboardSelectionRequestedChanged() {
-                                if (fileBrowserModal.keyboardSelectionRequested && fileBrowserModal.keyboardSelectionIndex === delegateRoot.index) {
-                                    fileBrowserModal.keyboardSelectionRequested = false
-                                    selectedIndex = delegateRoot.index
-                                    setSelectedFileData(delegateRoot.filePath, delegateRoot.fileName, delegateRoot.fileIsDir)
-                                    if (weMode && delegateRoot.fileIsDir) {
-                                        var sceneId = delegateRoot.filePath.split("/").pop()
-                                        fileSelected("we:" + sceneId)
-                                        fileBrowserModal.close()
-                                    } else if (delegateRoot.fileIsDir) {
-                                        navigateTo(delegateRoot.filePath)
-                                    } else {
-                                        fileSelected(delegateRoot.filePath)
-                                        fileBrowserModal.close()
+                                            target: fileBrowserModal
+                                        }
                                     }
                                 }
                             }
-
-                            target: fileBrowserModal
                         }
                     }
-                }
-            }
 
-            Row {
-                id: saveRow
-
-                anchors.bottom: parent.bottom
-                anchors.left: parent.left
-                anchors.right: parent.right
-                anchors.margins: Theme.spacingL
-                height: saveMode ? 40 : 0
-                visible: saveMode
-                spacing: Theme.spacingM
-
-                DankTextField {
-                    id: fileNameInput
-
-                    width: parent.width - saveButton.width - Theme.spacingM
-                    height: 40
-                    text: defaultFileName
-                    placeholderText: "Enter filename..."
-                    ignoreLeftRightKeys: false
-                    focus: saveMode
-                    topPadding: Theme.spacingS
-                    bottomPadding: Theme.spacingS
-                    Component.onCompleted: {
-                        if (saveMode)
-                            Qt.callLater(() => {
-                                             forceActiveFocus()
-                                         })
+                    FileBrowserSaveRow {
+                        anchors.bottom: parent.bottom
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.margins: Theme.spacingL
+                        saveMode: fileBrowserModal.saveMode
+                        defaultFileName: fileBrowserModal.defaultFileName
+                        currentPath: fileBrowserModal.currentPath
+                        onSaveRequested: filePath => handleSaveFile(filePath)
                     }
-                    onAccepted: {
-                        if (text.trim() !== "") {
-                            // Remove file:// protocol from currentPath if present for proper construction
-                            var basePath = currentPath.replace(/^file:\/\//, '')
-                            var fullPath = basePath + "/" + text.trim()
-                            // Ensure consistent path format - remove any double slashes and normalize
-                            fullPath = fullPath.replace(/\/+/g, '/')
-                            handleSaveFile(fullPath)
+
+                    KeyboardHints {
+                        id: keyboardHints
+
+                        anchors.bottom: parent.bottom
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.margins: Theme.spacingL
+                        showHints: fileBrowserModal.showKeyboardHints
+                    }
+
+                    FileInfo {
+                        id: fileInfo
+
+                        anchors.top: parent.top
+                        anchors.right: parent.right
+                        anchors.margins: Theme.spacingL
+                        width: 300
+                        showFileInfo: fileBrowserModal.showFileInfo
+                        selectedIndex: fileBrowserModal.selectedIndex
+                        sourceFolderModel: folderModel
+                        currentPath: fileBrowserModal.currentPath
+                        currentFileName: fileBrowserModal.selectedFileName
+                        currentFileIsDir: fileBrowserModal.selectedFileIsDir
+                        currentFileExtension: {
+                            if (fileBrowserModal.selectedFileIsDir || !fileBrowserModal.selectedFileName)
+                                return ""
+
+                            var lastDot = fileBrowserModal.selectedFileName.lastIndexOf('.')
+                            return lastDot > 0 ? fileBrowserModal.selectedFileName.substring(lastDot + 1).toLowerCase() : ""
                         }
                     }
-                }
 
-                StyledRect {
-                    id: saveButton
-
-                    width: 80
-                    height: 40
-                    color: fileNameInput.text.trim() !== "" ? Theme.primary : Theme.surfaceVariant
-                    radius: Theme.cornerRadius
-
-                    StyledText {
-                        anchors.centerIn: parent
-                        text: "Save"
-                        color: fileNameInput.text.trim() !== "" ? Theme.primaryText : Theme.surfaceVariantText
-                        font.pixelSize: Theme.fontSizeMedium
-                    }
-
-                    StateLayer {
-                        stateColor: Theme.primary
-                        cornerRadius: Theme.cornerRadius
-                        enabled: fileNameInput.text.trim() !== ""
-                        onClicked: {
-                            if (fileNameInput.text.trim() !== "") {
-                                // Remove file:// protocol from currentPath if present for proper construction
-                                var basePath = currentPath.replace(/^file:\/\//, '')
-                                var fullPath = basePath + "/" + fileNameInput.text.trim()
-                                // Ensure consistent path format - remove any double slashes and normalize
-                                fullPath = fullPath.replace(/\/+/g, '/')
-                                handleSaveFile(fullPath)
-                            }
-                        }
+                    FileBrowserSortMenu {
+                        id: sortMenu
+                        anchors.top: parent.top
+                        anchors.right: parent.right
+                        anchors.topMargin: 120
+                        anchors.rightMargin: Theme.spacingL
+                        sortBy: fileBrowserModal.sortBy
+                        sortAscending: fileBrowserModal.sortAscending
+                        onSortBySelected: value => {
+                                              fileBrowserModal.sortBy = value
+                                          }
+                        onSortOrderSelected: ascending => {
+                                                 fileBrowserModal.sortAscending = ascending
+                                             }
                     }
                 }
             }
 
-            KeyboardHints {
-                id: keyboardHints
-
-                anchors.bottom: parent.bottom
-                anchors.left: parent.left
-                anchors.right: parent.right
-                anchors.margins: Theme.spacingL
-                showHints: fileBrowserModal.showKeyboardHints
-            }
-
-            FileInfo {
-                id: fileInfo
-
-                anchors.top: parent.top
-                anchors.right: parent.right
-                anchors.margins: Theme.spacingL
-                width: 300
-                showFileInfo: fileBrowserModal.showFileInfo
-                selectedIndex: fileBrowserModal.selectedIndex
-                sourceFolderModel: folderModel
-                currentPath: fileBrowserModal.currentPath
-                currentFileName: fileBrowserModal.selectedFileName
-                currentFileIsDir: fileBrowserModal.selectedFileIsDir
-                currentFileExtension: {
-                    if (fileBrowserModal.selectedFileIsDir || !fileBrowserModal.selectedFileName)
-                        return ""
-
-                    var lastDot = fileBrowserModal.selectedFileName.lastIndexOf('.')
-                    return lastDot > 0 ? fileBrowserModal.selectedFileName.substring(lastDot + 1).toLowerCase() : ""
-                }
-            }
-
-            // Overwrite confirmation dialog
-            Item {
-                id: overwriteDialog
+            FileBrowserOverwriteDialog {
                 anchors.fill: parent
-                visible: showOverwriteConfirmation
-                
-                Keys.onEscapePressed: {
+                showDialog: showOverwriteConfirmation
+                pendingFilePath: fileBrowserModal.pendingFilePath
+                onConfirmed: filePath => {
+                                 showOverwriteConfirmation = false
+                                 fileSelected(filePath)
+                                 pendingFilePath = ""
+                                 Qt.callLater(() => fileBrowserModal.close())
+                             }
+                onCancelled: {
                     showOverwriteConfirmation = false
                     pendingFilePath = ""
-                }
-                
-                Keys.onReturnPressed: {
-                    showOverwriteConfirmation = false
-                    fileSelected(pendingFilePath)
-                    pendingFilePath = ""
-                    Qt.callLater(() => fileBrowserModal.close())
-                }
-                
-                focus: showOverwriteConfirmation
-                
-                Rectangle {
-                    anchors.fill: parent
-                    color: Theme.shadowStrong
-                    opacity: 0.8
-                    
-                    MouseArea {
-                        anchors.fill: parent
-                        onClicked: {
-                            showOverwriteConfirmation = false
-                            pendingFilePath = ""
-                        }
-                    }
-                }
-                
-                StyledRect {
-                    anchors.centerIn: parent
-                    width: 400
-                    height: 160
-                    color: Theme.surfaceContainer
-                    radius: Theme.cornerRadius
-                    border.color: Theme.outlineMedium
-                    border.width: 1
-                    
-                    Column {
-                        anchors.centerIn: parent
-                        width: parent.width - Theme.spacingL * 2
-                        spacing: Theme.spacingM
-                        
-                        StyledText {
-                            text: qsTr("File Already Exists")
-                            font.pixelSize: Theme.fontSizeLarge
-                            font.weight: Font.Medium
-                            color: Theme.surfaceText
-                            anchors.horizontalCenter: parent.horizontalCenter
-                        }
-                        
-                        StyledText {
-                            text: qsTr("A file with this name already exists. Do you want to overwrite it?")
-                            font.pixelSize: Theme.fontSizeMedium
-                            color: Theme.surfaceTextMedium
-                            width: parent.width
-                            wrapMode: Text.WordWrap
-                            horizontalAlignment: Text.AlignHCenter
-                        }
-                        
-                        Row {
-                            anchors.horizontalCenter: parent.horizontalCenter
-                            spacing: Theme.spacingM
-                            
-                            StyledRect {
-                                width: 80
-                                height: 36
-                                radius: Theme.cornerRadius
-                                color: cancelArea.containsMouse ? Theme.surfaceVariantHover : Theme.surfaceVariant
-                                border.color: Theme.outline
-                                border.width: 1
-                                
-                                StyledText {
-                                    anchors.centerIn: parent
-                                    text: qsTr("Cancel")
-                                    font.pixelSize: Theme.fontSizeMedium
-                                    color: Theme.surfaceText
-                                    font.weight: Font.Medium
-                                }
-                                
-                                MouseArea {
-                                    id: cancelArea
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: {
-                                        showOverwriteConfirmation = false
-                                        pendingFilePath = ""
-                                    }
-                                }
-                            }
-                            
-                            StyledRect {
-                                width: 90
-                                height: 36
-                                radius: Theme.cornerRadius
-                                color: overwriteArea.containsMouse ? Qt.darker(Theme.primary, 1.1) : Theme.primary
-                                
-                                StyledText {
-                                    anchors.centerIn: parent
-                                    text: qsTr("Overwrite")
-                                    font.pixelSize: Theme.fontSizeMedium
-                                    color: Theme.background
-                                    font.weight: Font.Medium
-                                }
-                                
-                                MouseArea {
-                                    id: overwriteArea
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: {
-                                        showOverwriteConfirmation = false
-                                        fileSelected(pendingFilePath)
-                                        pendingFilePath = ""
-                                        Qt.callLater(() => fileBrowserModal.close())
-                                    }
-                                }
-                            }
-                        }
-                    }
                 }
             }
         }

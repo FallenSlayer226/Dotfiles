@@ -49,7 +49,7 @@ Rectangle {
         if (keyboardNavigationActive && expanded && selectedNotificationIndex >= 0) {
             return Theme.primaryHoverLight
         }
-        return Theme.surfaceContainerHigh
+        return Theme.withAlpha(Theme.surfaceContainerHigh, Theme.popupTransparency)
     }
     border.color: {
         if (isGroupSelected && keyboardNavigationActive) {
@@ -133,10 +133,8 @@ Rectangle {
             }
 
             hasImage: hasNotificationImage
-            fallbackIcon: notificationGroup?.latestNotification?.appIcon || "notifications"  
+            fallbackIcon: ""
             fallbackText: {
-                if (hasNotificationImage || (notificationGroup?.latestNotification?.appIcon && notificationGroup.latestNotification.appIcon !== ""))
-                    return ""
                 const appName = notificationGroup?.appName || "?"
                 return appName.charAt(0).toUpperCase()
             }
@@ -344,7 +342,7 @@ Rectangle {
                         return baseHeight
                     }
                     radius: Theme.cornerRadius
-                    color: isSelected ? Theme.primaryPressed : Theme.surfaceContainerHigh
+                    color: isSelected ? Theme.primaryPressed : Theme.withAlpha(Theme.surfaceContainerHigh, Theme.popupTransparency)
                     border.color: isSelected ? Qt.rgba(Theme.primary.r, Theme.primary.g, Theme.primary.b, 0.4) : Qt.rgba(Theme.outline.r, Theme.outline.g, Theme.outline.b, 0.05)
                     border.width: isSelected ? 1 : 1
 
@@ -390,21 +388,11 @@ Rectangle {
                                 return ""
                             }
 
-                            fallbackIcon: {
-                                if (modelData?.appIcon && !hasNotificationImage) {
-                                    const appIcon = modelData.appIcon
-                                    if (!appIcon.startsWith("file://") && !appIcon.startsWith("http://") && !appIcon.startsWith("https://"))
-                                        return appIcon
-                                }
-                                return "notifications"
-                            }
+                            fallbackIcon: ""
 
                             fallbackText: {
-                                if (!hasNotificationImage && (!modelData?.appIcon || modelData.appIcon === "")) {
-                                    const appName = modelData?.appName || "?"
-                                    return appName.charAt(0).toUpperCase()
-                                }
-                                return ""
+                                const appName = modelData?.appName || "?"
+                                return appName.charAt(0).toUpperCase()
                             }
                         }
 
@@ -549,7 +537,7 @@ Rectangle {
 
                                         StyledText {
                                             id: clearText
-                                            text: "Clear"
+                                            text: I18n.tr("Dismiss")
                                             color: parent.isHovered ? Theme.primary : Theme.surfaceVariantText
                                             font.pixelSize: Theme.fontSizeSmall
                                             font.weight: Font.Medium
@@ -642,7 +630,7 @@ Rectangle {
 
         StyledText {
             id: clearText
-            text: "Clear"
+            text: I18n.tr("Dismiss")
             color: clearButton.isHovered ? Theme.primary : Theme.surfaceVariantText
             font.pixelSize: Theme.fontSizeSmall
             font.weight: Font.Medium

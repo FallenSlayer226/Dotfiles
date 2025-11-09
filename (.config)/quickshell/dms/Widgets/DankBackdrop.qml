@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Effects
 import qs.Common
 
 Item {
@@ -37,27 +38,27 @@ Item {
         visible: !isColorWallpaper
     }
 
-    Item {
+    Image {
         anchors.left: parent.left
         anchors.bottom: parent.bottom
         anchors.leftMargin: Theme.spacingXL * 2
         anchors.bottomMargin: Theme.spacingXL * 2
+        width: 200
+        height: width * (569.94629 / 506.50931)
+        fillMode: Image.PreserveAspectFit
+        smooth: true
+        mipmap: true
+        asynchronous: true
+        source: "file://" + Theme.shellDir + "/assets/danklogonormal.svg"
         opacity: 0.25
         visible: !isColorWallpaper
-
-        StyledText {
-            anchors.left: parent.left
-            anchors.bottom: parent.bottom
-            // ! TODO qmlfmt will brick this
-            text: `██████╗  █████╗ ███╗   ██╗██╗  ██╗
-██╔══██╗██╔══██╗████╗  ██║██║ ██╔╝
-██║  ██║███████║██╔██╗ ██║█████╔╝
-██║  ██║██╔══██║██║╚██╗██║██╔═██╗
-██████╔╝██║  ██║██║ ╚████║██║  ██╗
-╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═══╝╚═╝  ╚═╝`
-            isMonospace: true
-            font.pixelSize: Theme.fontSizeLarge * 1.2
-            color: Theme.primary
+        layer.enabled: true
+        layer.smooth: true
+        layer.mipmap: true
+        layer.effect: MultiEffect {
+            saturation: 0
+            colorization: 1
+            colorizationColor: Theme.primary
         }
     }
 }

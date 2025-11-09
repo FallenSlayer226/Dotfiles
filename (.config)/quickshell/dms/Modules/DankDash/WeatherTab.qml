@@ -24,7 +24,7 @@ Item {
         }
 
         StyledText {
-            text: "No Weather Data Available"
+            text: I18n.tr("No Weather Data Available")
             font.pixelSize: Theme.fontSizeLarge
             color: Qt.rgba(Theme.surfaceText.r, Theme.surfaceText.g, Theme.surfaceText.b, 0.7)
             anchors.horizontalCenter: parent.horizontalCenter
@@ -132,14 +132,14 @@ Item {
                             anchors.left: tempText.right
                             anchors.leftMargin: Theme.spacingXS
                             anchors.verticalCenter: parent.verticalCenter
-                            
+
                             MouseArea {
                                 anchors.fill: parent
                                 hoverEnabled: true
                                 cursorShape: Qt.PointingHandCursor
                                 onClicked: {
                                     if (WeatherService.weather.available) {
-                                        SettingsData.setTemperatureUnit(!SettingsData.useFahrenheit)
+                                        SettingsData.set("temperatureUnit", !SettingsData.useFahrenheit)
                                     }
                                 }
                                 enabled: WeatherService.weather.available
@@ -231,7 +231,7 @@ Item {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 radius: Theme.cornerRadius
-                color: Theme.surfaceContainerHigh
+                color: Theme.withAlpha(Theme.surfaceContainerHigh, Theme.popupTransparency)
 
                 Column {
                     anchors.centerIn: parent
@@ -257,7 +257,7 @@ Item {
                         spacing: 2
 
                         StyledText {
-                            text: "Feels Like"
+                            text: I18n.tr("Feels Like")
                             font.pixelSize: Theme.fontSizeSmall
                             color: Qt.rgba(Theme.surfaceText.r, Theme.surfaceText.g, Theme.surfaceText.b, 0.7)
                             anchors.horizontalCenter: parent.horizontalCenter
@@ -278,7 +278,7 @@ Item {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 radius: Theme.cornerRadius
-                color: Theme.surfaceContainerHigh
+                color: Theme.withAlpha(Theme.surfaceContainerHigh, Theme.popupTransparency)
 
                 Column {
                     anchors.centerIn: parent
@@ -304,7 +304,7 @@ Item {
                         spacing: 2
 
                         StyledText {
-                            text: "Humidity"
+                            text: I18n.tr("Humidity")
                             font.pixelSize: Theme.fontSizeSmall
                             color: Qt.rgba(Theme.surfaceText.r, Theme.surfaceText.g, Theme.surfaceText.b, 0.7)
                             anchors.horizontalCenter: parent.horizontalCenter
@@ -325,7 +325,7 @@ Item {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 radius: Theme.cornerRadius
-                color: Theme.surfaceContainerHigh
+                color: Theme.withAlpha(Theme.surfaceContainerHigh, Theme.popupTransparency)
 
                 Column {
                     anchors.centerIn: parent
@@ -351,7 +351,7 @@ Item {
                         spacing: 2
 
                         StyledText {
-                            text: "Wind"
+                            text: I18n.tr("Wind")
                             font.pixelSize: Theme.fontSizeSmall
                             color: Qt.rgba(Theme.surfaceText.r, Theme.surfaceText.g, Theme.surfaceText.b, 0.7)
                             anchors.horizontalCenter: parent.horizontalCenter
@@ -372,7 +372,7 @@ Item {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 radius: Theme.cornerRadius
-                color: Theme.surfaceContainerHigh
+                color: Theme.withAlpha(Theme.surfaceContainerHigh, Theme.popupTransparency)
 
                 Column {
                     anchors.centerIn: parent
@@ -398,7 +398,7 @@ Item {
                         spacing: 2
 
                         StyledText {
-                            text: "Pressure"
+                            text: I18n.tr("Pressure")
                             font.pixelSize: Theme.fontSizeSmall
                             color: Qt.rgba(Theme.surfaceText.r, Theme.surfaceText.g, Theme.surfaceText.b, 0.7)
                             anchors.horizontalCenter: parent.horizontalCenter
@@ -419,7 +419,7 @@ Item {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 radius: Theme.cornerRadius
-                color: Theme.surfaceContainerHigh
+                color: Theme.withAlpha(Theme.surfaceContainerHigh, Theme.popupTransparency)
 
                 Column {
                     anchors.centerIn: parent
@@ -445,7 +445,7 @@ Item {
                         spacing: 2
 
                         StyledText {
-                            text: "Rain Chance"
+                            text: I18n.tr("Rain Chance")
                             font.pixelSize: Theme.fontSizeSmall
                             color: Qt.rgba(Theme.surfaceText.r, Theme.surfaceText.g, Theme.surfaceText.b, 0.7)
                             anchors.horizontalCenter: parent.horizontalCenter
@@ -466,7 +466,7 @@ Item {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 radius: Theme.cornerRadius
-                color: Theme.surfaceContainerHigh
+                color: Theme.withAlpha(Theme.surfaceContainerHigh, Theme.popupTransparency)
 
                 Column {
                     anchors.centerIn: parent
@@ -492,14 +492,14 @@ Item {
                         spacing: 2
 
                         StyledText {
-                            text: "Visibility"
+                            text: I18n.tr("Visibility")
                             font.pixelSize: Theme.fontSizeSmall
                             color: Qt.rgba(Theme.surfaceText.r, Theme.surfaceText.g, Theme.surfaceText.b, 0.7)
                             anchors.horizontalCenter: parent.horizontalCenter
                         }
 
                         StyledText {
-                            text: "Good"
+                            text: I18n.tr("Good")
                             font.pixelSize: Theme.fontSizeSmall + 1
                             color: Theme.surfaceText
                             font.weight: Font.Medium
@@ -522,7 +522,7 @@ Item {
             spacing: Theme.spacingS
 
             StyledText {
-                text: "7-Day Forecast"
+                text: I18n.tr("7-Day Forecast")
                 font.pixelSize: Theme.fontSizeMedium
                 color: Theme.surfaceText
                 font.weight: Font.Medium
@@ -540,7 +540,7 @@ Item {
                         width: (parent.width - Theme.spacingXS * 6) / 7
                         height: parent.height
                         radius: Theme.cornerRadius
-                        
+
                         property var dayDate: {
                             const date = new Date()
                             date.setDate(date.getDate() + index)
@@ -554,7 +554,7 @@ Item {
                             return null
                         }
 
-                        color: isToday ? Qt.rgba(Theme.primary.r, Theme.primary.g, Theme.primary.b, 0.1) : Theme.surfaceContainerHigh
+                        color: isToday ? Qt.rgba(Theme.primary.r, Theme.primary.g, Theme.primary.b, 0.1) : Theme.withAlpha(Theme.surfaceContainerHigh, Theme.popupTransparency)
                         border.color: isToday ? Qt.rgba(Theme.primary.r, Theme.primary.g, Theme.primary.b, 0.3) : "transparent"
                         border.width: isToday ? 1 : 0
 

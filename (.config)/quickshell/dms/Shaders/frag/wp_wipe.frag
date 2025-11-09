@@ -14,67 +14,69 @@ layout(std140, binding = 0) uniform buf {
     float direction;     // 0=left, 1=right, 2=up, 3=down
     float smoothness;    // Edge smoothness (0.0 to 1.0, 0=sharp, 1=very smooth)
     
-    // Fill mode parameters
-    float fillMode;      // 0=no(center), 1=crop(fill), 2=fit(contain), 3=stretch
-    float imageWidth1;   // Width of source1 image
-    float imageHeight1;  // Height of source1 image
-    float imageWidth2;   // Width of source2 image
-    float imageHeight2;  // Height of source2 image
-    float screenWidth;   // Screen width
-    float screenHeight;  // Screen height
-    vec4 fillColor;      // Fill color for empty areas (default: black)
+    float fillMode;      // 0=stretch, 1=fit, 2=crop, 3=tile, 4=tileV, 5=tileH, 6=pad
+    float imageWidth1;
+    float imageHeight1;
+    float imageWidth2;
+    float imageHeight2;
+    float screenWidth;
+    float screenHeight;
+    vec4 fillColor;
 } ubuf;
 
-// Calculate UV coordinates based on fill mode
 vec2 calculateUV(vec2 uv, float imgWidth, float imgHeight) {
-    float imageAspect = imgWidth / imgHeight;
-    float screenAspect = ubuf.screenWidth / ubuf.screenHeight;
     vec2 transformedUV = uv;
-    
+
     if (ubuf.fillMode < 0.5) {
-        // Mode 0: no (center) - No resize, center image at original size
-        // Convert UV to pixel coordinates, offset, then back to UV in image space
-        vec2 screenPixel = uv * vec2(ubuf.screenWidth, ubuf.screenHeight);
-        vec2 imageOffset = (vec2(ubuf.screenWidth, ubuf.screenHeight) - vec2(imgWidth, imgHeight)) * 0.5;
-        vec2 imagePixel = screenPixel - imageOffset;
-        transformedUV = imagePixel / vec2(imgWidth, imgHeight);
-    } 
+        transformedUV = uv;
+    }
     else if (ubuf.fillMode < 1.5) {
-        // Mode 1: crop (fill/cover) - Fill screen, crop excess (default)
+        float scale = min(ubuf.screenWidth / imgWidth, ubuf.screenHeight / imgHeight);
+        vec2 scaledImageSize = vec2(imgWidth, imgHeight) * scale;
+        vec2 offset = (vec2(ubuf.screenWidth, ubuf.screenHeight) - scaledImageSize) * 0.5;
+        vec2 screenPixel = uv * vec2(ubuf.screenWidth, ubuf.screenHeight);
+        vec2 imagePixel = (screenPixel - offset) / scale;
+        transformedUV = imagePixel / vec2(imgWidth, imgHeight);
+    }
+    else if (ubuf.fillMode < 2.5) {
         float scale = max(ubuf.screenWidth / imgWidth, ubuf.screenHeight / imgHeight);
         vec2 scaledImageSize = vec2(imgWidth, imgHeight) * scale;
         vec2 offset = (scaledImageSize - vec2(ubuf.screenWidth, ubuf.screenHeight)) / scaledImageSize;
         transformedUV = uv * (vec2(1.0) - offset) + offset * 0.5;
     }
-    else if (ubuf.fillMode < 2.5) {
-        // Mode 2: fit (contain) - Fit inside screen, maintain aspect ratio
-        float scale = min(ubuf.screenWidth / imgWidth, ubuf.screenHeight / imgHeight);
-        vec2 scaledImageSize = vec2(imgWidth, imgHeight) * scale;
-        vec2 offset = (vec2(ubuf.screenWidth, ubuf.screenHeight) - scaledImageSize) * 0.5;
-        
-        // Convert screen UV to pixel coordinates
+    else if (ubuf.fillMode < 3.5) {
+        transformedUV = fract(uv * vec2(ubuf.screenWidth, ubuf.screenHeight) / vec2(imgWidth, imgHeight));
+    }
+    else if (ubuf.fillMode < 4.5) {
+        vec2 tileUV = uv * vec2(ubuf.screenWidth, ubuf.screenHeight) / vec2(imgWidth, imgHeight);
+        transformedUV = vec2(uv.x, fract(tileUV.y));
+    }
+    else if (ubuf.fillMode < 5.5) {
+        vec2 tileUV = uv * vec2(ubuf.screenWidth, ubuf.screenHeight) / vec2(imgWidth, imgHeight);
+        transformedUV = vec2(fract(tileUV.x), uv.y);
+    }
+    else {
         vec2 screenPixel = uv * vec2(ubuf.screenWidth, ubuf.screenHeight);
-        // Adjust for offset and scale
-        vec2 imagePixel = (screenPixel - offset) / scale;
-        // Convert back to UV coordinates in image space
+        vec2 imageOffset = (vec2(ubuf.screenWidth, ubuf.screenHeight) - vec2(imgWidth, imgHeight)) * 0.5;
+        vec2 imagePixel = screenPixel - imageOffset;
         transformedUV = imagePixel / vec2(imgWidth, imgHeight);
     }
-    // Mode 3: stretch - Use original UV (stretches to fit)
-    // No transformation needed for stretch mode
-    
+
     return transformedUV;
 }
 
-// Sample texture with fill mode and handle out-of-bounds
 vec4 sampleWithFillMode(sampler2D tex, vec2 uv, float imgWidth, float imgHeight) {
     vec2 transformedUV = calculateUV(uv, imgWidth, imgHeight);
-    
-    // Check if UV is out of bounds
-    if (transformedUV.x < 0.0 || transformedUV.x > 1.0 || 
+
+    if (ubuf.fillMode >= 2.5 && ubuf.fillMode <= 5.5) {
+        return texture(tex, transformedUV);
+    }
+
+    if (transformedUV.x < 0.0 || transformedUV.x > 1.0 ||
         transformedUV.y < 0.0 || transformedUV.y > 1.0) {
         return ubuf.fillColor;
     }
-    
+
     return texture(tex, transformedUV);
 }
 

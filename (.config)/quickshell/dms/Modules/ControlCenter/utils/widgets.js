@@ -15,8 +15,13 @@ function addWidget(widgetId) {
         widget.mountPath = "/"
     }
 
+    if (widgetId === "brightnessSlider") {
+        widget.instanceId = generateUniqueId()
+        widget.deviceName = ""
+    }
+
     widgets.push(widget)
-    SettingsData.setControlCenterWidgets(widgets)
+    SettingsData.set("controlCenterWidgets", widgets)
 }
 
 function generateUniqueId() {
@@ -27,7 +32,7 @@ function removeWidget(index) {
     var widgets = SettingsData.controlCenterWidgets.slice()
     if (index >= 0 && index < widgets.length) {
         widgets.splice(index, 1)
-        SettingsData.setControlCenterWidgets(widgets)
+        SettingsData.set("controlCenterWidgets", widgets)
     }
 }
 
@@ -49,12 +54,12 @@ function toggleWidgetSize(index) {
             }
         }
 
-        SettingsData.setControlCenterWidgets(widgets)
+        SettingsData.set("controlCenterWidgets", widgets)
     }
 }
 
 function reorderWidgets(newOrder) {
-    SettingsData.setControlCenterWidgets(newOrder)
+    SettingsData.set("controlCenterWidgets", newOrder)
 }
 
 function moveWidget(fromIndex, toIndex) {
@@ -62,7 +67,7 @@ function moveWidget(fromIndex, toIndex) {
     if (fromIndex >= 0 && fromIndex < widgets.length && toIndex >= 0 && toIndex < widgets.length) {
         const movedWidget = widgets.splice(fromIndex, 1)[0]
         widgets.splice(toIndex, 0, movedWidget)
-        SettingsData.setControlCenterWidgets(widgets)
+        SettingsData.set("controlCenterWidgets", widgets)
     }
 }
 
@@ -77,9 +82,9 @@ function resetToDefault() {
         {"id": "nightMode", "enabled": true, "width": 50},
         {"id": "darkMode", "enabled": true, "width": 50}
     ]
-    SettingsData.setControlCenterWidgets(defaultWidgets)
+    SettingsData.set("controlCenterWidgets", defaultWidgets)
 }
 
 function clearAll() {
-    SettingsData.setControlCenterWidgets([])
+    SettingsData.set("controlCenterWidgets", [])
 }

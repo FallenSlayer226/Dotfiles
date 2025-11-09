@@ -22,7 +22,6 @@ Item {
             anchors.fill: parent
             active: root.currentIndex === 0
             visible: active
-            asynchronous: true
 
             sourceComponent: Component {
                 PersonalizationTab {
@@ -34,27 +33,13 @@ Item {
         }
 
         Loader {
-            id: timeLoader
+            id: timeWeatherLoader
 
             anchors.fill: parent
             active: root.currentIndex === 1
             visible: active
-            asynchronous: true
 
-            sourceComponent: TimeTab {
-            }
-
-        }
-
-        Loader {
-            id: weatherLoader
-
-            anchors.fill: parent
-            active: root.currentIndex === 2
-            visible: active
-            asynchronous: true
-
-            sourceComponent: WeatherTab {
+            sourceComponent: TimeWeatherTab {
             }
 
         }
@@ -63,11 +48,11 @@ Item {
             id: topBarLoader
 
             anchors.fill: parent
-            active: root.currentIndex === 3
+            active: root.currentIndex === 2
             visible: active
-            asynchronous: true
 
             sourceComponent: DankBarTab {
+                parentModal: root.parentModal
             }
 
         }
@@ -76,9 +61,8 @@ Item {
             id: widgetsLoader
 
             anchors.fill: parent
-            active: root.currentIndex === 4
+            active: root.currentIndex === 3
             visible: active
-            asynchronous: true
 
             sourceComponent: WidgetTweaksTab {
             }
@@ -89,9 +73,8 @@ Item {
             id: dockLoader
 
             anchors.fill: parent
-            active: root.currentIndex === 5
+            active: root.currentIndex === 4
             visible: active
-            asynchronous: true
 
             sourceComponent: Component {
                 DockTab {
@@ -105,9 +88,8 @@ Item {
             id: displaysLoader
 
             anchors.fill: parent
-            active: root.currentIndex === 6
+            active: root.currentIndex === 5
             visible: active
-            asynchronous: true
 
             sourceComponent: DisplaysTab {
             }
@@ -118,9 +100,8 @@ Item {
             id: launcherLoader
 
             anchors.fill: parent
-            active: root.currentIndex === 7
+            active: root.currentIndex === 6
             visible: active
-            asynchronous: true
 
             sourceComponent: LauncherTab {
             }
@@ -131,9 +112,8 @@ Item {
             id: themeColorsLoader
 
             anchors.fill: parent
-            active: root.currentIndex === 8
+            active: root.currentIndex === 7
             visible: active
-            asynchronous: true
 
             sourceComponent: ThemeColorsTab {
             }
@@ -144,9 +124,8 @@ Item {
             id: powerLoader
 
             anchors.fill: parent
-            active: root.currentIndex === 9
+            active: root.currentIndex === 8
             visible: active
-            asynchronous: true
 
             sourceComponent: PowerSettings {
             }
@@ -157,11 +136,11 @@ Item {
             id: pluginsLoader
 
             anchors.fill: parent
-            active: root.currentIndex === 10
+            active: root.currentIndex === 9
             visible: active
-            asynchronous: true
 
             sourceComponent: PluginsTab {
+                parentModal: root.parentModal
             }
 
         }
@@ -170,9 +149,8 @@ Item {
             id: aboutLoader
 
             anchors.fill: parent
-            active: root.currentIndex === 11
+            active: root.currentIndex === 10
             visible: active
-            asynchronous: true
 
             sourceComponent: AboutTab {
             }

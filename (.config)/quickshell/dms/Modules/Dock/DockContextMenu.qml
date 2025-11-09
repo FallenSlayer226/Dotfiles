@@ -1,5 +1,4 @@
 import QtQuick
-import QtQuick.Controls
 import Quickshell
 import Quickshell.Wayland
 import Quickshell.Widgets
@@ -10,39 +9,32 @@ import qs.Widgets
 PanelWindow {
     id: root
 
-    property bool showContextMenu: false
     property var appData: null
     property var anchorItem: null
     property real dockVisibleHeight: 40
     property int margin: 10
     property bool hidePin: false
+    property var desktopEntry: null
 
-    function showForButton(button, data, dockHeight, hidePinOption) {
+    function showForButton(button, data, dockHeight, hidePinOption, entry, dockScreen) {
+        if (dockScreen) {
+            root.screen = dockScreen
+        }
+
         anchorItem = button
         appData = data
         dockVisibleHeight = dockHeight || 40
         hidePin = hidePinOption || false
+        desktopEntry = entry || null
 
-        const dockWindow = button.Window.window
-        if (dockWindow) {
-            for (var i = 0; i < Quickshell.screens.length; i++) {
-                const s = Quickshell.screens[i]
-                if (dockWindow.x >= s.x && dockWindow.x < s.x + s.width) {
-                    root.screen = s
-                    break
-                }
-            }
-        }
-
-        showContextMenu = true
+        visible = true
     }
     function close() {
-        showContextMenu = false
+        visible = false
     }
 
-    screen: Quickshell.screens[0]
-
-    visible: showContextMenu
+    screen: null
+    visible: false
     WlrLayershell.layer: WlrLayershell.Overlay
     WlrLayershell.exclusiveZone: -1
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
@@ -99,7 +91,7 @@ PanelWindow {
         }
 
         const isVertical = SettingsData.dockPosition === SettingsData.Position.Left || SettingsData.dockPosition === SettingsData.Position.Right
-        const dockMargin = 16
+        const dockMargin = SettingsData.dockMargin + 16
         let buttonScreenX, buttonScreenY
 
         if (isVertical) {
@@ -134,9 +126,6 @@ PanelWindow {
     Rectangle {
         id: menuContainer
 
-        width: Math.min(400, Math.max(200, menuColumn.implicitWidth + Theme.spacingS * 2))
-        height: Math.max(60, menuColumn.implicitHeight + Theme.spacingS * 2)
-
         x: {
             const isVertical = SettingsData.dockPosition === SettingsData.Position.Left || SettingsData.dockPosition === SettingsData.Position.Right
             if (isVertical) {
@@ -169,12 +158,23 @@ PanelWindow {
                 }
             }
         }
-        color: Theme.popupBackground()
+
+        width: Math.min(400, Math.max(180, menuColumn.implicitWidth + Theme.spacingS * 2))
+        height: Math.max(60, menuColumn.implicitHeight + Theme.spacingS * 2)
+        color: Theme.withAlpha(Theme.surfaceContainer, Theme.popupTransparency)
         radius: Theme.cornerRadius
         border.color: Qt.rgba(Theme.outline.r, Theme.outline.g, Theme.outline.b, 0.08)
         border.width: 1
-        opacity: showContextMenu ? 1 : 0
-        scale: showContextMenu ? 1 : 0.85
+
+        opacity: root.visible ? 1 : 0
+        visible: opacity > 0
+
+        Behavior on opacity {
+            NumberAnimation {
+                duration: Theme.shortDuration
+                easing.type: Theme.emphasizedEasing
+            }
+        }
 
         Rectangle {
             anchors.fill: parent
@@ -184,7 +184,7 @@ PanelWindow {
             anchors.bottomMargin: -4
             radius: parent.radius
             color: Qt.rgba(0, 0, 0, 0.15)
-            z: parent.z - 1
+            z: -1
         }
 
         Column {
@@ -223,7 +223,7 @@ PanelWindow {
                         anchors.right: closeButton.left
                         anchors.rightMargin: Theme.spacingXS
                         anchors.verticalCenter: parent.verticalCenter
-                        text: (modelData && modelData.title) ? modelData.title : "(Unnamed)"
+                        text: (modelData && modelData.title) ? modelData.title: I18n.tr("(Unnamed)")
                         font.pixelSize: Theme.fontSizeSmall
                         color: Theme.surfaceText
                         font.weight: Font.Normal
@@ -289,6 +289,71 @@ PanelWindow {
                 color: Qt.rgba(Theme.outline.r, Theme.outline.g, Theme.outline.b, 0.2)
             }
 
+            Repeater {
+                model: root.desktopEntry && root.desktopEntry.actions ? root.desktopEntry.actions : []
+
+                Rectangle {
+                    width: parent.width
+                    height: 28
+                    radius: Theme.cornerRadius
+                    color: actionArea.containsMouse ? Qt.rgba(Theme.primary.r, Theme.primary.g, Theme.primary.b, 0.12) : "transparent"
+
+                    Row {
+                        anchors.left: parent.left
+                        anchors.leftMargin: Theme.spacingS
+                        anchors.right: parent.right
+                        anchors.rightMargin: Theme.spacingS
+                        anchors.verticalCenter: parent.verticalCenter
+                        spacing: Theme.spacingXS
+
+                        Item {
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: 16
+                            height: 16
+                            visible: modelData.icon && modelData.icon !== ""
+
+                            IconImage {
+                                anchors.fill: parent
+                                source: modelData.icon ? Quickshell.iconPath(modelData.icon, true) : ""
+                                smooth: true
+                                asynchronous: true
+                                visible: status === Image.Ready
+                            }
+                        }
+
+                        StyledText {
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: modelData.name || ""
+                            font.pixelSize: Theme.fontSizeSmall
+                            color: Theme.surfaceText
+                            font.weight: Font.Normal
+                            elide: Text.ElideRight
+                            wrapMode: Text.NoWrap
+                        }
+                    }
+
+                    MouseArea {
+                        id: actionArea
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: {
+                            if (modelData) {
+                                SessionService.launchDesktopAction(root.desktopEntry, modelData)
+                            }
+                            root.close()
+                        }
+                    }
+                }
+            }
+
+            Rectangle {
+                visible: root.desktopEntry && root.desktopEntry.actions && root.desktopEntry.actions.length > 0
+                width: parent.width
+                height: 1
+                color: Qt.rgba(Theme.outline.r, Theme.outline.g, Theme.outline.b, 0.2)
+            }
+
             Rectangle {
                 visible: !root.hidePin
                 width: parent.width
@@ -302,7 +367,7 @@ PanelWindow {
                     anchors.right: parent.right
                     anchors.rightMargin: Theme.spacingS
                     anchors.verticalCenter: parent.verticalCenter
-                    text: root.appData && root.appData.isPinned ? "Unpin from Dock" : "Pin to Dock"
+                    text: root.appData && root.appData.isPinned ? I18n.tr("Unpin from Dock") : I18n.tr("Pin to Dock")
                     font.pixelSize: Theme.fontSizeSmall
                     color: Theme.surfaceText
                     font.weight: Font.Normal
@@ -330,14 +395,49 @@ PanelWindow {
             }
 
             Rectangle {
-                visible: root.appData && root.appData.type === "window"
+                visible: (root.appData && root.appData.type === "window") || (root.desktopEntry && SessionService.hasPrimeRun)
                 width: parent.width
                 height: 1
                 color: Qt.rgba(Theme.outline.r, Theme.outline.g, Theme.outline.b, 0.2)
             }
 
             Rectangle {
-                visible: root.appData && root.appData.type === "window"
+                visible: root.desktopEntry && SessionService.hasPrimeRun
+                width: parent.width
+                height: 28
+                radius: Theme.cornerRadius
+                color: primeRunArea.containsMouse ? Qt.rgba(Theme.primary.r, Theme.primary.g, Theme.primary.b, 0.12) : "transparent"
+
+                StyledText {
+                    anchors.left: parent.left
+                    anchors.leftMargin: Theme.spacingS
+                    anchors.right: parent.right
+                    anchors.rightMargin: Theme.spacingS
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: I18n.tr("Launch on dGPU")
+                    font.pixelSize: Theme.fontSizeSmall
+                    color: Theme.surfaceText
+                    font.weight: Font.Normal
+                    elide: Text.ElideRight
+                    wrapMode: Text.NoWrap
+                }
+
+                MouseArea {
+                    id: primeRunArea
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: {
+                        if (root.desktopEntry) {
+                            SessionService.launchDesktopEntry(root.desktopEntry, true)
+                        }
+                        root.close()
+                    }
+                }
+            }
+
+            Rectangle {
+                visible: root.appData && (root.appData.type === "window" || (root.appData.type === "grouped" && root.appData.windowCount > 0))
                 width: parent.width
                 height: 1
                 color: Qt.rgba(Theme.outline.r, Theme.outline.g, Theme.outline.b, 0.2)
@@ -377,7 +477,6 @@ PanelWindow {
                     onClicked: {
                         const sortedToplevels = CompositorService.sortedToplevels
                         if (root.appData && root.appData.type === "window") {
-                            // Find and close the specific window
                             for (var i = 0; i < sortedToplevels.length; i++) {
                                 const toplevel = sortedToplevels[i]
                                 const checkId = toplevel.title + "|" + (toplevel.appId || "") + "|" + i
@@ -387,7 +486,6 @@ PanelWindow {
                                 }
                             }
                         } else if (root.appData && root.appData.type === "grouped") {
-                            // Close all windows for this app
                             const allToplevels = ToplevelManager.toplevels.values
                             for (let i = 0; i < allToplevels.length; i++) {
                                 const toplevel = allToplevels[i]
@@ -401,27 +499,11 @@ PanelWindow {
                 }
             }
         }
-
-        Behavior on opacity {
-            NumberAnimation {
-                duration: Theme.mediumDuration
-                easing.type: Theme.emphasizedEasing
-            }
-        }
-
-        Behavior on scale {
-            NumberAnimation {
-                duration: Theme.mediumDuration
-                easing.type: Theme.emphasizedEasing
-            }
-        }
     }
 
     MouseArea {
         anchors.fill: parent
         z: -1
-        onClicked: {
-            root.close()
-        }
+        onClicked: root.close()
     }
 }

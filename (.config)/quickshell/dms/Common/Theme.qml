@@ -9,60 +9,70 @@ import Quickshell.Io
 import Quickshell.Services.UPower
 import qs.Common
 import qs.Services
+import qs.Modules.Greetd
 import "StockThemes.js" as StockThemes
 
 Singleton {
     id: root
 
+    readonly property string stateDir: Paths.strip(StandardPaths.writableLocation(StandardPaths.GenericCacheLocation).toString()) + "/DankMaterialShell"
+
     readonly property bool envDisableMatugen: Quickshell.env("DMS_DISABLE_MATUGEN") === "1" || Quickshell.env("DMS_DISABLE_MATUGEN") === "true"
 
-    // ! TODO - Synchronize with niri/hyprland gaps?
-    readonly property real popupDistance: 2
+    readonly property real popupDistance: {
+        if (typeof SettingsData === "undefined")
+        return 4
+        return SettingsData.popupGapsAuto ? Math.max(4, SettingsData.dankBarSpacing) : SettingsData.popupGapsManual
+    }
 
     property string currentTheme: "blue"
     property string currentThemeCategory: "generic"
     property bool isLightMode: typeof SessionData !== "undefined" ? SessionData.isLightMode : false
+    property bool colorsFileLoadFailed: false
 
     readonly property string dynamic: "dynamic"
-    readonly property string custom : "custom"
+    readonly property string custom: "custom"
 
     readonly property string homeDir: Paths.strip(StandardPaths.writableLocation(StandardPaths.HomeLocation))
     readonly property string configDir: Paths.strip(StandardPaths.writableLocation(StandardPaths.ConfigLocation))
     readonly property string shellDir: Paths.strip(Qt.resolvedUrl(".").toString()).replace("/Common/", "")
     readonly property string wallpaperPath: {
-        if (typeof SessionData === "undefined") return ""
+        if (typeof SessionData === "undefined")
+        return ""
 
         if (SessionData.perMonitorWallpaper) {
-            var screens = Quickshell.screens
-            if (screens.length > 0) {
-                var firstMonitorWallpaper = SessionData.getMonitorWallpaper(screens[0].name)
-                var wallpaperPath = firstMonitorWallpaper || SessionData.wallpaperPath
-
-                if (wallpaperPath && wallpaperPath.startsWith("we:")) {
-                    return stateDir + "/we_screenshots/" + wallpaperPath.substring(3) + ".jpg"
-                }
-
-                return wallpaperPath
-            }
-        }
-
-        var wallpaperPath = SessionData.wallpaperPath
-        var screens = Quickshell.screens
-        if (screens.length > 0 && wallpaperPath && wallpaperPath.startsWith("we:")) {
-            return stateDir + "/we_screenshots/" + wallpaperPath.substring(3) + ".jpg"
-        }
-
-        return wallpaperPath
-    }
-    readonly property string rawWallpaperPath: {
-        if (typeof SessionData === "undefined") return ""
-        
-        if (SessionData.perMonitorWallpaper) {
-            // Use first monitor's wallpaper for dynamic theming
             var screens = Quickshell.screens
             if (screens.length > 0) {
                 var firstMonitorWallpaper = SessionData.getMonitorWallpaper(screens[0].name)
                 return firstMonitorWallpaper || SessionData.wallpaperPath
+            }
+        }
+
+        return SessionData.wallpaperPath
+    }
+    readonly property string rawWallpaperPath: {
+        if (typeof SessionData === "undefined")
+        return ""
+
+        if (SessionData.perMonitorWallpaper) {
+            var screens = Quickshell.screens
+            if (screens.length > 0) {
+                var targetMonitor = (typeof SettingsData !== "undefined" && SettingsData.matugenTargetMonitor && SettingsData.matugenTargetMonitor !== "") ? SettingsData.matugenTargetMonitor : screens[0].name
+
+                var targetMonitorExists = false
+                for (var i = 0; i < screens.length; i++) {
+                    if (screens[i].name === targetMonitor) {
+                        targetMonitorExists = true
+                        break
+                    }
+                }
+
+                if (!targetMonitorExists) {
+                    targetMonitor = screens[0].name
+                }
+
+                var targetMonitorWallpaper = SessionData.getMonitorWallpaper(targetMonitor)
+                return targetMonitorWallpaper || SessionData.wallpaperPath
             }
         }
 
@@ -74,17 +84,63 @@ Singleton {
     property bool qtThemingEnabled: typeof SettingsData !== "undefined" ? (SettingsData.qt5ctAvailable || SettingsData.qt6ctAvailable) : false
     property var workerRunning: false
     property var matugenColors: ({})
-    property int colorUpdateTrigger: 0
     property var customThemeData: null
-
-    readonly property string stateDir: Paths.strip(StandardPaths.writableLocation(StandardPaths.CacheLocation).toString()) + "/dankshell"
 
     Component.onCompleted: {
         Quickshell.execDetached(["mkdir", "-p", stateDir])
-        matugenCheck.running = true
+        Proc.runCommand("matugenCheck", ["which", "matugen"], (output, code) => {
+                            matugenAvailable = (code === 0) && !envDisableMatugen
+                            const isGreeterMode = (typeof SessionData !== "undefined" && SessionData.isGreeterMode)
+
+                            if (!matugenAvailable || isGreeterMode) {
+                                return
+                            }
+
+                            if (colorsFileLoadFailed && currentTheme === dynamic && rawWallpaperPath) {
+                                console.info("Theme: Matugen now available, regenerating colors for dynamic theme")
+                                const isLight = (typeof SessionData !== "undefined" && SessionData.isLightMode)
+                                const iconTheme = (typeof SettingsData !== "undefined" && SettingsData.iconTheme) ? SettingsData.iconTheme : "System Default"
+                                const selectedMatugenType = (typeof SettingsData !== "undefined" && SettingsData.matugenScheme) ? SettingsData.matugenScheme : "scheme-tonal-spot"
+                                if (rawWallpaperPath.startsWith("#")) {
+                                    setDesiredTheme("hex", rawWallpaperPath, isLight, iconTheme, selectedMatugenType)
+                                } else {
+                                    setDesiredTheme("image", rawWallpaperPath, isLight, iconTheme, selectedMatugenType)
+                                }
+                                return
+                            }
+
+                            const isLight = (typeof SessionData !== "undefined" && SessionData.isLightMode)
+                            const iconTheme = (typeof SettingsData !== "undefined" && SettingsData.iconTheme) ? SettingsData.iconTheme : "System Default"
+
+                            if (currentTheme === dynamic) {
+                                if (rawWallpaperPath) {
+                                    const selectedMatugenType = (typeof SettingsData !== "undefined" && SettingsData.matugenScheme) ? SettingsData.matugenScheme : "scheme-tonal-spot"
+                                    if (rawWallpaperPath.startsWith("#")) {
+                                        setDesiredTheme("hex", rawWallpaperPath, isLight, iconTheme, selectedMatugenType)
+                                    } else {
+                                        setDesiredTheme("image", rawWallpaperPath, isLight, iconTheme, selectedMatugenType)
+                                    }
+                                }
+                            } else {
+                                let primaryColor
+                                let matugenType
+                                if (currentTheme === "custom") {
+                                    if (customThemeData && customThemeData.primary) {
+                                        primaryColor = customThemeData.primary
+                                        matugenType = customThemeData.matugen_type
+                                    }
+                                } else {
+                                    primaryColor = currentThemeData.primary
+                                    matugenType = currentThemeData.matugen_type
+                                }
+
+                                if (primaryColor) {
+                                    setDesiredTheme("hex", primaryColor, isLight, iconTheme, matugenType)
+                                }
+                            }
+                        }, 0)
         if (typeof SessionData !== "undefined") {
             SessionData.isLightModeChanged.connect(root.onLightModeChanged)
-            isLightMode = SessionData.isLightMode
         }
 
         if (typeof SettingsData !== "undefined" && SettingsData.currentThemeName) {
@@ -100,7 +156,6 @@ Singleton {
     }
 
     function getMatugenColor(path, fallback) {
-        colorUpdateTrigger
         const colorMode = (typeof SessionData !== "undefined" && SessionData.isLightMode) ? "light" : "dark"
         let cur = matugenColors && matugenColors.colors && matugenColors.colors[colorMode]
         for (const part of path.split(".")) {
@@ -141,20 +196,60 @@ Singleton {
         }
     }
 
-    readonly property var availableMatugenSchemes: [
-        ({ "value": "scheme-tonal-spot", "label": "Tonal Spot", "description": "Balanced palette with focused accents (default)." }),
-        ({ "value": "scheme-content", "label": "Content", "description": "Derives colors that closely match the underlying image." }),
-        ({ "value": "scheme-expressive", "label": "Expressive", "description": "Vibrant palette with playful saturation." }),
-        ({ "value": "scheme-fidelity", "label": "Fidelity", "description": "High-fidelity palette that preserves source hues." }),
-        ({ "value": "scheme-fruit-salad", "label": "Fruit Salad", "description": "Colorful mix of bright contrasting accents." }),
-        ({ "value": "scheme-monochrome", "label": "Monochrome", "description": "Minimal palette built around a single hue." }),
-        ({ "value": "scheme-neutral", "label": "Neutral", "description": "Muted palette with subdued, calming tones." }),
-        ({ "value": "scheme-rainbow", "label": "Rainbow", "description": "Diverse palette spanning the full spectrum." })
-    ]
+    readonly property var availableMatugenSchemes: [({
+                                                         "value": "scheme-tonal-spot",
+                                                         "label": "Tonal Spot",
+                                                         "description": I18n.tr("Balanced palette with focused accents (default).")
+                                                     }), 
+                                                     ({
+                                                        "value": "scheme-vibrant",
+                                                        "label": "Vibrant",
+                                                        "description": I18n.tr("Lively palette with saturated accents.")
+                                                    }),
+                                                    ({
+                                                        "value": "scheme-dynamic-contrast",
+                                                        "label": "Dynamic Contrast",
+                                                        "description": I18n.tr("High-contrast palette for strong visual distinction.")
+                                                    }),
+                                                    ({
+                                                    "value": "scheme-content",
+                                                    "label": "Content",
+                                                    "description": I18n.tr("Derives colors that closely match the underlying image.")
+                                                    }),
+                                                    ({
+                                                        "value": "scheme-expressive",
+                                                        "label": "Expressive",
+                                                        "description": I18n.tr("Vibrant palette with playful saturation.")
+                                                    }),
+                                                    ({
+                                                        "value": "scheme-fidelity",
+                                                        "label": "Fidelity",
+                                                        "description": I18n.tr("High-fidelity palette that preserves source hues.")
+                                                    }),
+                                                    ({
+                                                        "value": "scheme-fruit-salad",
+                                                        "label": "Fruit Salad",
+                                                        "description": I18n.tr("Colorful mix of bright contrasting accents.")
+                                                    }),
+                                                    ({
+                                                        "value": "scheme-monochrome",
+                                                        "label": "Monochrome",
+                                                        "description": I18n.tr("Minimal palette built around a single hue.")
+                                                    }),
+                                                    ({
+                                                        "value": "scheme-neutral",
+                                                        "label": "Neutral",
+                                                        "description": I18n.tr("Muted palette with subdued, calming tones.")
+                                                    }),
+                                                    ({
+                                                        "value": "scheme-rainbow",
+                                                        "label": "Rainbow",
+                                                        "description": I18n.tr("Diverse palette spanning the full spectrum.")
+                                                    })]
 
     function getMatugenScheme(value) {
         const schemes = availableMatugenSchemes
-        for (let i = 0; i < schemes.length; i++) {
+        for (var i = 0; i < schemes.length; i++) {
             if (schemes[i].value === value)
                 return schemes[i]
         }
@@ -241,13 +336,37 @@ Singleton {
     property color shadowMedium: Qt.rgba(0, 0, 0, 0.08)
     property color shadowStrong: Qt.rgba(0, 0, 0, 0.3)
 
-    readonly property var animationDurations: [
-        { shorter: 0, short: 0, medium: 0, long: 0, extraLong: 0 },
-        { shorter: 50, short: 75, medium: 150, long: 250, extraLong: 500 },
-        { shorter: 100, short: 150, medium: 300, long: 500, extraLong: 1000 },
-        { shorter: 150, short: 225, medium: 450, long: 750, extraLong: 1500 },
-        { shorter: 200, short: 300, medium: 600, long: 1000, extraLong: 2000 }
-    ]
+    readonly property var animationDurations: [{
+            "shorter": 0,
+            "short": 0,
+            "medium": 0,
+            "long": 0,
+            "extraLong": 0
+        }, {
+            "shorter": 50,
+            "short": 75,
+            "medium": 150,
+            "long": 250,
+            "extraLong": 500
+        }, {
+            "shorter": 100,
+            "short": 150,
+            "medium": 300,
+            "long": 500,
+            "extraLong": 1000
+        }, {
+            "shorter": 150,
+            "short": 225,
+            "medium": 450,
+            "long": 750,
+            "extraLong": 1500
+        }, {
+            "shorter": 200,
+            "short": 300,
+            "medium": 600,
+            "long": 1000,
+            "extraLong": 2000
+        }]
 
     readonly property int currentAnimationSpeed: typeof SettingsData !== "undefined" ? SettingsData.animationSpeed : SettingsData.AnimationSpeed.Short
     readonly property var currentDurations: animationDurations[currentAnimationSpeed] || animationDurations[SettingsData.AnimationSpeed.Short]
@@ -260,7 +379,68 @@ Singleton {
     property int standardEasing: Easing.OutCubic
     property int emphasizedEasing: Easing.OutQuart
 
-    property real cornerRadius: typeof SettingsData !== "undefined" ? SettingsData.cornerRadius : 12
+    readonly property var expressiveCurves: {
+        "emphasized": [0.05, 0, 2 / 15, 0.06, 1 / 6, 0.4, 5 / 24, 0.82, 0.25, 1, 1, 1],
+        "emphasizedAccel": [0.3, 0, 0.8, 0.15, 1, 1],
+        "emphasizedDecel": [0.05, 0.7, 0.1, 1, 1, 1],
+        "standard": [0.2, 0, 0, 1, 1, 1],
+        "standardAccel": [0.3, 0, 1, 1, 1, 1],
+        "standardDecel": [0, 0, 0, 1, 1, 1],
+        "expressiveFastSpatial": [0.42, 1.67, 0.21, 0.9, 1, 1],
+        "expressiveDefaultSpatial": [0.38, 1.21, 0.22, 1, 1, 1],
+        "expressiveEffects": [0.34, 0.8, 0.34, 1, 1, 1]
+    }
+
+    readonly property var animationPresetDurations: {
+        "none": 0,
+        "short": 250,
+        "medium": 500,
+        "long": 750
+    }
+
+    readonly property int currentAnimationBaseDuration: {
+        if (typeof SettingsData === "undefined")
+        return 500
+
+        if (SettingsData.animationSpeed === SettingsData.AnimationSpeed.Custom) {
+            return SettingsData.customAnimationDuration
+        }
+
+        const presetMap = [0, 250, 500, 750]
+        return presetMap[SettingsData.animationSpeed] !== undefined ? presetMap[SettingsData.animationSpeed] : 500
+    }
+
+    readonly property var expressiveDurations: {
+        if (typeof SettingsData === "undefined") {
+            return {
+                "fast": 200,
+                "normal": 400,
+                "large": 600,
+                "extraLarge": 1000,
+                "expressiveFastSpatial": 350,
+                "expressiveDefaultSpatial": 500,
+                "expressiveEffects": 200
+            }
+        }
+
+        const baseDuration = currentAnimationBaseDuration
+        return {
+            "fast": baseDuration * 0.4,
+            "normal": baseDuration * 0.8,
+            "large": baseDuration * 1.2,
+            "extraLarge": baseDuration * 2.0,
+            "expressiveFastSpatial": baseDuration * 0.7,
+            "expressiveDefaultSpatial": baseDuration,
+            "expressiveEffects": baseDuration * 0.4
+        }
+    }
+
+    property real cornerRadius: {
+        if (typeof SessionData !== "undefined" && SessionData.isGreeterMode && typeof GreetdSettings !== "undefined") {
+            return GreetdSettings.cornerRadius
+        }
+        return typeof SettingsData !== "undefined" ? SettingsData.cornerRadius : 12
+    }
     property real spacingXS: 4
     property real spacingS: 8
     property real spacingM: 12
@@ -311,7 +491,7 @@ Singleton {
         }
         const isGreeterMode = (typeof SessionData !== "undefined" && SessionData.isGreeterMode)
         if (savePrefs && typeof SettingsData !== "undefined" && !isGreeterMode)
-            SettingsData.setTheme(currentTheme)
+            SettingsData.set("currentThemeName", currentTheme)
 
         if (!isGreeterMode) {
             generateSystemThemesFromCurrentTheme()
@@ -328,11 +508,13 @@ Singleton {
         }
 
         const isGreeterMode = (typeof SessionData !== "undefined" && SessionData.isGreeterMode)
-        isLightMode = light
         if (savePrefs && typeof SessionData !== "undefined" && !isGreeterMode)
-            SessionData.setLightMode(isLightMode)
+            SessionData.setLightMode(light)
         if (!isGreeterMode) {
-            PortalService.setLightMode(isLightMode)
+            // Skip with matugen becuase, our script runner will do it.
+            if (!matugenAvailable) {
+                PortalService.setLightMode(light)
+            }
             generateSystemThemesFromCurrentTheme()
         }
     }
@@ -373,20 +555,40 @@ Singleton {
 
     function getCatppuccinColor(variantName) {
         const catColors = {
-            "cat-rosewater": "#f5e0dc", "cat-flamingo": "#f2cdcd", "cat-pink": "#f5c2e7", "cat-mauve": "#cba6f7",
-            "cat-red": "#f38ba8", "cat-maroon": "#eba0ac", "cat-peach": "#fab387", "cat-yellow": "#f9e2af",
-            "cat-green": "#a6e3a1", "cat-teal": "#94e2d5", "cat-sky": "#89dceb", "cat-sapphire": "#74c7ec",
-            "cat-blue": "#89b4fa", "cat-lavender": "#b4befe"
+            "cat-rosewater": "#f5e0dc",
+            "cat-flamingo": "#f2cdcd",
+            "cat-pink": "#f5c2e7",
+            "cat-mauve": "#cba6f7",
+            "cat-red": "#f38ba8",
+            "cat-maroon": "#eba0ac",
+            "cat-peach": "#fab387",
+            "cat-yellow": "#f9e2af",
+            "cat-green": "#a6e3a1",
+            "cat-teal": "#94e2d5",
+            "cat-sky": "#89dceb",
+            "cat-sapphire": "#74c7ec",
+            "cat-blue": "#89b4fa",
+            "cat-lavender": "#b4befe"
         }
         return catColors[variantName] || "#cba6f7"
     }
 
     function getCatppuccinVariantName(variantName) {
         const catNames = {
-            "cat-rosewater": "Rosewater", "cat-flamingo": "Flamingo", "cat-pink": "Pink", "cat-mauve": "Mauve",
-            "cat-red": "Red", "cat-maroon": "Maroon", "cat-peach": "Peach", "cat-yellow": "Yellow",
-            "cat-green": "Green", "cat-teal": "Teal", "cat-sky": "Sky", "cat-sapphire": "Sapphire",
-            "cat-blue": "Blue", "cat-lavender": "Lavender"
+            "cat-rosewater": "Rosewater",
+            "cat-flamingo": "Flamingo",
+            "cat-pink": "Pink",
+            "cat-mauve": "Mauve",
+            "cat-red": "Red",
+            "cat-maroon": "Maroon",
+            "cat-peach": "Peach",
+            "cat-yellow": "Yellow",
+            "cat-green": "Green",
+            "cat-teal": "Teal",
+            "cat-sky": "Sky",
+            "cat-sapphire": "Sapphire",
+            "cat-blue": "Blue",
+            "cat-lavender": "Lavender"
         }
         return catNames[variantName] || "Unknown"
     }
@@ -411,13 +613,6 @@ Singleton {
     readonly property var _availableThemeNames: StockThemes.getAllThemeNames()
     property string currentThemeName: currentTheme
 
-    function popupBackground() {
-        return Qt.rgba(surfaceContainer.r, surfaceContainer.g, surfaceContainer.b, popupTransparency)
-    }
-
-    function contentBackground() {
-        return Qt.rgba(surfaceContainer.r, surfaceContainer.g, surfaceContainer.b, popupTransparency)
-    }
 
     function panelBackground() {
         return Qt.rgba(surfaceContainer.r, surfaceContainer.g, surfaceContainer.b, panelTransparency)
@@ -429,14 +624,14 @@ Singleton {
         const colorMode = typeof SettingsData !== "undefined" ? SettingsData.widgetBackgroundColor : "sch"
         switch (colorMode) {
             case "s":
-                return surface
+            return surface
             case "sc":
-                return surfaceContainer
+            return surfaceContainer
             case "sch":
-                return surfaceContainerHigh
+            return surfaceContainerHigh
             case "sth":
             default:
-                return surfaceTextHover
+            return surfaceTextHover
         }
     }
 
@@ -450,27 +645,35 @@ Singleton {
         const colorMode = typeof SettingsData !== "undefined" ? SettingsData.widgetBackgroundColor : "sch"
         switch (colorMode) {
             case "s":
-                return Qt.rgba(surface.r, surface.g, surface.b, widgetTransparency)
+            return Qt.rgba(surface.r, surface.g, surface.b, widgetTransparency)
             case "sc":
-                return Qt.rgba(surfaceContainer.r, surfaceContainer.g, surfaceContainer.b, widgetTransparency)
+            return Qt.rgba(surfaceContainer.r, surfaceContainer.g, surfaceContainer.b, widgetTransparency)
             case "sch":
-                return Qt.rgba(surfaceContainerHigh.r, surfaceContainerHigh.g, surfaceContainerHigh.b, widgetTransparency)
+            return Qt.rgba(surfaceContainerHigh.r, surfaceContainerHigh.g, surfaceContainerHigh.b, widgetTransparency)
             case "sth":
             default:
-                return Qt.rgba(surfaceContainer.r, surfaceContainer.g, surfaceContainer.b, widgetTransparency)
+            return Qt.rgba(surfaceContainer.r, surfaceContainer.g, surfaceContainer.b, widgetTransparency)
         }
     }
 
-    function getPopupBackgroundAlpha() {
-        return popupTransparency
-    }
-
-    function getContentBackgroundAlpha() {
-        return popupTransparency
-    }
 
     function isColorDark(c) {
         return (0.299 * c.r + 0.587 * c.g + 0.114 * c.b) < 0.5
+    }
+
+    function barIconSize(barThickness, offset) {
+        const defaultOffset = offset !== undefined ? offset : -6
+        return Math.round((barThickness / 48) * (iconSize + defaultOffset))
+    }
+
+    function barTextSize(barThickness) {
+        const scale = barThickness / 48
+        const dankBarScale = (typeof SettingsData !== "undefined" ? SettingsData.dankBarFontScale : 1.0)
+        if (scale <= 0.75)
+            return fontSizeSmall * 0.9 * dankBarScale
+        if (scale >= 1.25)
+            return fontSizeMedium * dankBarScale
+        return fontSizeSmall * dankBarScale
     }
 
     function getBatteryIcon(level, isCharging, batteryAvailable) {
@@ -563,12 +766,7 @@ Singleton {
         }
     }
 
-
     function onLightModeChanged() {
-        if (matugenColors && Object.keys(matugenColors).length > 0) {
-            colorUpdateTrigger++
-        }
-
         if (currentTheme === "custom" && customThemeFileView.path) {
             customThemeFileView.reload()
         }
@@ -576,9 +774,11 @@ Singleton {
 
     function setDesiredTheme(kind, value, isLight, iconTheme, matugenType) {
         if (!matugenAvailable) {
-            console.warn("matugen not available or disabled - cannot set system theme")
+            console.warn("Theme: matugen not available or disabled - cannot set system theme")
             return
         }
+
+        console.info("Theme: Setting desired theme -", kind, "mode:", isLight ? "light" : "dark", "type:", matugenType)
 
         if (typeof NiriService !== "undefined" && CompositorService.isNiri) {
             NiriService.suppressNextToast()
@@ -590,7 +790,8 @@ Singleton {
             "mode": isLight ? "light" : "dark",
             "iconTheme": iconTheme || "System Default",
             "matugenType": matugenType || "scheme-tonal-spot",
-            "surfaceBase": (typeof SettingsData !== "undefined" && SettingsData.surfaceBase) ? SettingsData.surfaceBase : "sc"
+            "surfaceBase": (typeof SettingsData !== "undefined" && SettingsData.surfaceBase) ? SettingsData.surfaceBase : "sc",
+            "runUserTemplates": (typeof SettingsData !== "undefined") ? SettingsData.runUserMatugenTemplates : true
         }
 
         const json = JSON.stringify(desired)
@@ -598,15 +799,9 @@ Singleton {
 
         Quickshell.execDetached(["sh", "-c", `mkdir -p '${stateDir}' && cat > '${desiredPath}' << 'EOF'\n${json}\nEOF`])
         workerRunning = true
-        if (rawWallpaperPath.startsWith("we:")) {
-            console.log("calling matugen worker")
-            systemThemeGenerator.command = [
-                "sh", "-c",
-                `sleep 1 && ${shellDir}/scripts/matugen-worker.sh '${stateDir}' '${shellDir}' --run`
-            ]
-        } else {
-            systemThemeGenerator.command = [shellDir + "/scripts/matugen-worker.sh", stateDir, shellDir, "--run"]
-        }
+        const syncModeWithPortal = (typeof SettingsData !== "undefined" && SettingsData.syncModeWithPortal) ? "true" : "false"
+        console.log("Theme: Starting matugen worker")
+        systemThemeGenerator.command = [shellDir + "/scripts/matugen-worker.sh", stateDir, shellDir, configDir, syncModeWithPortal, "--run"]
         systemThemeGenerator.running = true
     }
 
@@ -619,14 +814,14 @@ Singleton {
         const iconTheme = (typeof SettingsData !== "undefined" && SettingsData.iconTheme) ? SettingsData.iconTheme : "System Default"
 
         if (currentTheme === dynamic) {
-            if (!wallpaperPath) {
+            if (!rawWallpaperPath) {
                 return
             }
             const selectedMatugenType = (typeof SettingsData !== "undefined" && SettingsData.matugenScheme) ? SettingsData.matugenScheme : "scheme-tonal-spot"
-            if (wallpaperPath.startsWith("#")) {
-                setDesiredTheme("hex", wallpaperPath, isLight, iconTheme, selectedMatugenType)
+            if (rawWallpaperPath.startsWith("#")) {
+                setDesiredTheme("hex", rawWallpaperPath, isLight, iconTheme, selectedMatugenType)
             } else {
-                setDesiredTheme("image", wallpaperPath, isLight, iconTheme, selectedMatugenType)
+                setDesiredTheme("image", rawWallpaperPath, isLight, iconTheme, selectedMatugenType)
             }
         } else {
             let primaryColor
@@ -660,8 +855,17 @@ Singleton {
         }
 
         const isLight = (typeof SessionData !== "undefined" && SessionData.isLightMode) ? "true" : "false"
-        gtkApplier.command = [shellDir + "/scripts/gtk.sh", configDir, isLight, shellDir]
-        gtkApplier.running = true
+        Proc.runCommand("gtkApplier", [shellDir + "/scripts/gtk.sh", configDir, isLight, shellDir], (output, exitCode) => {
+                            if (exitCode === 0) {
+                                if (typeof ToastService !== "undefined" && typeof NiriService !== "undefined" && !NiriService.matugenSuppression) {
+                                    ToastService.showInfo("GTK colors applied successfully")
+                                }
+                            } else {
+                                if (typeof ToastService !== "undefined") {
+                                    ToastService.showError("Failed to apply GTK colors")
+                                }
+                            }
+                        })
     }
 
     function applyQtColors() {
@@ -672,65 +876,113 @@ Singleton {
             return
         }
 
-        qtApplier.command = [shellDir + "/scripts/qt.sh", configDir]
-        qtApplier.running = true
+        Proc.runCommand("qtApplier", [shellDir + "/scripts/qt.sh", configDir], (output, exitCode) => {
+                            if (exitCode === 0) {
+                                if (typeof ToastService !== "undefined") {
+                                    ToastService.showInfo("Qt colors applied successfully")
+                                }
+                            } else {
+                                if (typeof ToastService !== "undefined") {
+                                    ToastService.showError("Failed to apply Qt colors")
+                                }
+                            }
+                        })
     }
 
-    function withAlpha(c, a) { return Qt.rgba(c.r, c.g, c.b, a); }
-
-    function snap(value, dpr) {
-        return Math.round(value * dpr) / dpr
+    function withAlpha(c, a) {
+        return Qt.rgba(c.r, c.g, c.b, a)
     }
 
-    Process {
-        id: matugenCheck
-        command: ["which", "matugen"]
-        onExited: code => {
-            matugenAvailable = (code === 0) && !envDisableMatugen
-            const isGreeterMode = (typeof SessionData !== "undefined" && SessionData.isGreeterMode)
-
-            if (!matugenAvailable || isGreeterMode) {
-                return
-            }
-
-            const isLight = (typeof SessionData !== "undefined" && SessionData.isLightMode)
-            const iconTheme = (typeof SettingsData !== "undefined" && SettingsData.iconTheme) ? SettingsData.iconTheme : "System Default"
-
-            if (currentTheme === dynamic) {
-                if (wallpaperPath) {
-                    Quickshell.execDetached(["rm", "-f", stateDir + "/matugen.key"])
-                    const selectedMatugenType = (typeof SettingsData !== "undefined" && SettingsData.matugenScheme) ? SettingsData.matugenScheme : "scheme-tonal-spot"
-                    if (wallpaperPath.startsWith("#")) {
-                        setDesiredTheme("hex", wallpaperPath, isLight, iconTheme, selectedMatugenType)
-                    } else {
-                        setDesiredTheme("image", wallpaperPath, isLight, iconTheme, selectedMatugenType)
-                    }
-                }
-            } else {
-                let primaryColor
-                let matugenType
-                if (currentTheme === "custom") {
-                    if (customThemeData && customThemeData.primary) {
-                        primaryColor = customThemeData.primary
-                        matugenType = customThemeData.matugen_type
-                    }
-                } else {
-                    primaryColor = currentThemeData.primary
-                    matugenType = currentThemeData.matugen_type
-                }
-
-                if (primaryColor) {
-                    Quickshell.execDetached(["rm", "-f", stateDir + "/matugen.key"])
-                    setDesiredTheme("hex", primaryColor, isLight, iconTheme, matugenType)
-                }
-            }
+    function getFillMode(modeName) {
+        switch (modeName) {
+        case "Stretch":
+            return Image.Stretch
+        case "Fit":
+        case "PreserveAspectFit":
+            return Image.PreserveAspectFit
+        case "Fill":
+        case "PreserveAspectCrop":
+            return Image.PreserveAspectCrop
+        case "Tile":
+            return Image.Tile
+        case "TileVertically":
+            return Image.TileVertically
+        case "TileHorizontally":
+            return Image.TileHorizontally
+        case "Pad":
+            return Image.Pad
+        default:
+            return Image.PreserveAspectCrop
         }
     }
 
+    function snap(value, dpr) {
+        const s = dpr || 1
+        return Math.round(value * s) / s
+    }
 
+    function px(value, dpr) {
+        const s = dpr || 1
+        return Math.round(value * s) / s
+    }
 
-    Process {
-        id: ensureStateDir
+    function hairline(dpr) {
+        return 1 / (dpr || 1)
+    }
+
+    function invertHex(hex) {
+        hex = hex.replace('#', '')
+
+        if (!/^[0-9A-Fa-f]{6}$/.test(hex)) {
+            return hex
+        }
+
+        const r = parseInt(hex.substr(0, 2), 16)
+        const g = parseInt(hex.substr(2, 2), 16)
+        const b = parseInt(hex.substr(4, 2), 16)
+
+        const invR = (255 - r).toString(16).padStart(2, '0')
+        const invG = (255 - g).toString(16).padStart(2, '0')
+        const invB = (255 - b).toString(16).padStart(2, '0')
+
+        return `#${invR}${invG}${invB}`
+    }
+
+    property string baseLogoColor: {
+        if (typeof SettingsData === "undefined")
+        return ""
+        const colorOverride = SettingsData.launcherLogoColorOverride
+        if (!colorOverride || colorOverride === "")
+        return ""
+        if (colorOverride === "primary")
+        return primary
+        if (colorOverride === "surface")
+        return surfaceText
+        return colorOverride
+    }
+
+    property string effectiveLogoColor: {
+        if (typeof SettingsData === "undefined")
+        return ""
+
+        const colorOverride = SettingsData.launcherLogoColorOverride
+        if (!colorOverride || colorOverride === "")
+        return ""
+
+        if (colorOverride === "primary")
+        return primary
+        if (colorOverride === "surface")
+        return surfaceText
+
+        if (!SettingsData.launcherLogoColorInvertOnMode) {
+            return colorOverride
+        }
+
+        if (isLightMode) {
+            return invertHex(colorOverride)
+        }
+
+        return colorOverride
     }
 
     Process {
@@ -740,61 +992,19 @@ Singleton {
         onExited: exitCode => {
             workerRunning = false
 
-            if (exitCode !== 0 && exitCode !== 2) {
+            if (exitCode === 0) {
+                console.info("Theme: Matugen worker completed successfully")
+                if (currentTheme === dynamic) {
+                    console.log("Theme: Reloading dynamic colors file")
+                    dynamicColorsFileView.reload()
+                }
+            } else if (exitCode === 2) {
+                console.log("Theme: Matugen worker completed with code 2 (no changes needed)")
+            } else {
                 if (typeof ToastService !== "undefined") {
                     ToastService.showError("Theme worker failed (" + exitCode + ")")
                 }
-                console.warn("Theme worker failed with exit code:", exitCode)
-            }
-        }
-    }
-
-    Process {
-        id: gtkApplier
-        running: false
-
-        stdout: StdioCollector {
-            id: gtkStdout
-        }
-
-        stderr: StdioCollector {
-            id: gtkStderr
-        }
-
-        onExited: exitCode => {
-            if (exitCode === 0) {
-                if (typeof ToastService !== "undefined" && typeof NiriService !== "undefined" && !NiriService.matugenSuppression) {
-                    ToastService.showInfo("GTK colors applied successfully")
-                }
-            } else {
-                if (typeof ToastService !== "undefined") {
-                    ToastService.showError("Failed to apply GTK colors: " + gtkStderr.text)
-                }
-            }
-        }
-    }
-
-    Process {
-        id: qtApplier
-        running: false
-
-        stdout: StdioCollector {
-            id: qtStdout
-        }
-
-        stderr: StdioCollector {
-            id: qtStderr
-        }
-
-        onExited: exitCode => {
-            if (exitCode === 0) {
-                if (typeof ToastService !== "undefined") {
-                    ToastService.showInfo("Qt colors applied successfully")
-                }
-            } else {
-                if (typeof ToastService !== "undefined") {
-                    ToastService.showError("Failed to apply Qt colors: " + qtStderr.text)
-                }
+                console.warn("Theme: Matugen worker failed with exit code:", exitCode)
             }
         }
     }
@@ -831,9 +1041,7 @@ Singleton {
         id: dynamicColorsFileView
         path: {
             const greetCfgDir = Quickshell.env("DMS_GREET_CFG_DIR") || "/etc/greetd/.dms"
-            const colorsPath = SessionData.isGreeterMode
-                ? greetCfgDir + "/colors.json"
-                : stateDir + "/dms-colors.json"
+            const colorsPath = SessionData.isGreeterMode ? greetCfgDir + "/colors.json" : stateDir + "/dms-colors.json"
             return colorsPath
         }
         watchChanges: currentTheme === dynamic && !SessionData.isGreeterMode
@@ -843,7 +1051,6 @@ Singleton {
                 const colorsText = dynamicColorsFileView.text()
                 if (colorsText) {
                     root.matugenColors = JSON.parse(colorsText)
-                    root.colorUpdateTrigger++
                     if (typeof ToastService !== "undefined") {
                         ToastService.clearWallpaperError()
                     }
@@ -859,6 +1066,8 @@ Singleton {
 
         onLoaded: {
             if (currentTheme === dynamic) {
+                console.info("Theme: Dynamic colors file loaded successfully")
+                colorsFileLoadFailed = false
                 parseAndLoadColors()
             }
         }
@@ -870,9 +1079,19 @@ Singleton {
         }
 
         onLoadFailed: function (error) {
-            if (currentTheme === dynamic && typeof ToastService !== "undefined") {
-                ToastService.showError("Failed to read dynamic colors: " + error)
+            if (currentTheme === dynamic) {
+                console.warn("Theme: Dynamic colors file load failed, marking for regeneration")
+                colorsFileLoadFailed = true
+                const isGreeterMode = (typeof SessionData !== "undefined" && SessionData.isGreeterMode)
+                if (!isGreeterMode && matugenAvailable && rawWallpaperPath) {
+                    console.log("Theme: Matugen available, triggering immediate regeneration")
+                    generateSystemThemesFromCurrentTheme()
+                }
             }
+        }
+
+        onPathChanged: {
+            colorsFileLoadFailed = false
         }
     }
 

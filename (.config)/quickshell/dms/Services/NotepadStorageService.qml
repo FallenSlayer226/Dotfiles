@@ -10,6 +10,8 @@ import qs.Common
 Singleton {
     id: root
 
+    property int refCount: 0
+
     readonly property string baseDir: Paths.strip(StandardPaths.writableLocation(StandardPaths.GenericStateLocation) + "/DankMaterialShell")
     readonly property string filesDir: baseDir + "/notepad-files"
     readonly property string metadataPath: baseDir + "/notepad-session.json"
@@ -17,10 +19,15 @@ Singleton {
     property var tabs: []
     property int currentTabIndex: 0
     property var tabsBeingCreated: ({})
+    property bool metadataLoaded: false
+
+    Component.onCompleted: {
+        ensureDirectories()
+    }
 
     FileView {
         id: metadataFile
-        path: root.metadataPath
+        path: root.refCount > 0 ? root.metadataPath : ""
         blockWrites: true
         atomicWrites: true
 
@@ -29,18 +36,29 @@ Singleton {
                 var data = JSON.parse(text())
                 root.tabs = data.tabs || []
                 root.currentTabIndex = data.currentTabIndex || 0
-                validateTabs()
+                root.metadataLoaded = true
+                root.validateTabs()
             } catch(e) {
                 console.warn("Failed to parse notepad metadata:", e)
-                createDefaultTab()
+                root.createDefaultTab()
             }
         }
 
         onLoadFailed: {
-            createDefaultTab()
+            root.createDefaultTab()
         }
     }
 
+    onRefCountChanged: {
+        if (refCount === 1 && !metadataLoaded) {
+            metadataFile.path = ""
+            metadataFile.path = root.metadataPath
+        }
+    }
+
+    function ensureDirectories() {
+        mkdirProcess.running = true
+    }
 
     function loadMetadata() {
         metadataFile.path = ""
@@ -56,10 +74,10 @@ Singleton {
         newTabsBeingCreated[id] = true
         tabsBeingCreated = newTabsBeingCreated
 
-        createEmptyFile(fullPath, function() {
+        root.createEmptyFile(fullPath, function() {
             root.tabs = [{
                 id: id,
-                title: "Untitled",
+                title: I18n.tr("Untitled"),
                 filePath: filePath,
                 isTemporary: true,
                 lastModified: new Date().toISOString(),
@@ -71,7 +89,7 @@ Singleton {
             var updatedTabsBeingCreated = Object.assign({}, tabsBeingCreated)
             delete updatedTabsBeingCreated[id]
             tabsBeingCreated = updatedTabsBeingCreated
-            saveMetadata()
+            root.saveMetadata()
         })
     }
 
@@ -101,9 +119,20 @@ Singleton {
             })
             return
         }
-        var loader = tabFileLoaderComponent.createObject(root, {
+
+        var fileChecker = fileExistsComponent.createObject(root, {
             path: fullPath,
-            callback: callback
+            callback: (exists) => {
+                if (exists) {
+                    var loader = tabFileLoaderComponent.createObject(root, {
+                        path: fullPath,
+                        callback: callback
+                    })
+                } else {
+                    console.warn("Tab file does not exist:", fullPath)
+                    callback("")
+                }
+            }
         })
     }
 
@@ -129,7 +158,7 @@ Singleton {
 
         var newTab = {
             id: id,
-            title: "Untitled",
+            title: I18n.tr("Untitled"),
             filePath: filePath,
             isTemporary: true,
             lastModified: new Date().toISOString(),
@@ -170,7 +199,7 @@ Singleton {
             createEmptyFile(baseDir + "/" + filePath, function() {
                 newTabs[0] = {
                     id: id,
-                    title: "Untitled",
+                    title: I18n.tr("Untitled"),
                     filePath: filePath,
                     isTemporary: true,
                     lastModified: new Date().toISOString(),
@@ -257,7 +286,7 @@ Singleton {
         tabs = validTabs
 
         if (tabs.length === 0) {
-            createDefaultTab()
+            root.createDefaultTab()
         }
     }
 
@@ -281,6 +310,22 @@ Singleton {
     }
 
     Component {
+        id: fileExistsComponent
+        Process {
+            property string path
+            property var callback
+            command: ["test", "-f", path]
+
+            Component.onCompleted: running = true
+
+            onExited: (exitCode) => {
+                callback(exitCode === 0)
+                destroy()
+            }
+        }
+    }
+
+    Component {
         id: tabFileSaverComponent
         FileView {
             property string content
@@ -294,7 +339,7 @@ Singleton {
 
             onSaved: {
                 if (tabIndex >= 0) {
-                    updateTabMetadata(tabIndex, {})
+                    root.updateTabMetadata(tabIndex, {})
                 }
                 if (creationCallback) {
                     creationCallback()
@@ -378,5 +423,10 @@ Singleton {
         id: deleteProcess
         property string filePath
         command: ["rm", "-f", filePath]
+    }
+
+    Process {
+        id: mkdirProcess
+        command: ["mkdir", "-p", root.baseDir, root.filesDir]
     }
 }

@@ -3,9 +3,13 @@ import QtQuick.Effects
 import Quickshell
 import Quickshell.Wayland
 import qs.Common
+import qs.Services
 
 PanelWindow {
     id: root
+
+    property string blurNamespace: "dms:osd"
+    WlrLayershell.namespace: blurNamespace
 
     property alias content: contentLoader.sourceComponent
     property alias contentLoader: contentLoader
@@ -34,6 +38,12 @@ PanelWindow {
         closeTimer.restart()
     }
 
+    function resetHideTimer() {
+        if (shouldBeVisible) {
+            hideTimer.restart()
+        }
+    }
+
     function updateHoverState() {
         let isHovered = (enableMouseInteraction && mouseArea.containsMouse) || osdContainer.childHovered
         if (enableMouseInteraction) {
@@ -51,11 +61,19 @@ PanelWindow {
     }
 
     screen: modelData
-    visible: shouldBeVisible
+    visible: false
     WlrLayershell.layer: WlrLayershell.Overlay
     WlrLayershell.exclusiveZone: -1
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
     color: "transparent"
+
+    readonly property real dpr: CompositorService.getScreenScale(screen)
+    readonly property real screenWidth: screen.width
+    readonly property real screenHeight: screen.height
+    readonly property real alignedWidth: Theme.px(osdWidth, dpr)
+    readonly property real alignedHeight: Theme.px(osdHeight, dpr)
+    readonly property real alignedX: Theme.snap((screenWidth - alignedWidth) / 2, dpr)
+    readonly property real alignedY: Theme.snap(screenHeight - alignedHeight - Theme.spacingM, dpr)
 
     anchors {
         top: true
@@ -89,23 +107,25 @@ PanelWindow {
         }
     }
 
-    Rectangle {
+    Item {
         id: osdContainer
+        x: alignedX
+        y: alignedY
+        width: alignedWidth
+        height: alignedHeight
+        opacity: shouldBeVisible ? 1 : 0
+        scale: shouldBeVisible ? 1 : 0.9
 
         property bool childHovered: false
 
-        width: osdWidth
-        height: osdHeight
-        anchors.horizontalCenter: parent.horizontalCenter
-        anchors.bottom: parent.bottom
-        anchors.bottomMargin: Theme.spacingM
-        color: Theme.popupBackground()
-        radius: Theme.cornerRadius
-        border.color: Qt.rgba(Theme.outline.r, Theme.outline.g, Theme.outline.b, 0.08)
-        border.width: 1
-        opacity: shouldBeVisible ? 1 : 0
-        scale: shouldBeVisible ? 1 : 0.9
-        layer.enabled: true
+        Rectangle {
+            id: osdBackground
+            anchors.fill: parent
+            color: Theme.withAlpha(Theme.surfaceContainer, Theme.popupTransparency)
+            radius: Theme.cornerRadius
+            border.color: Qt.rgba(Theme.outline.r, Theme.outline.g, Theme.outline.b, 0.08)
+            border.width: 1
+        }
 
         MouseArea {
             id: mouseArea
@@ -126,14 +146,6 @@ PanelWindow {
             asynchronous: false
         }
 
-        layer.effect: MultiEffect {
-            shadowEnabled: true
-            shadowHorizontalOffset: 0
-            shadowVerticalOffset: 4
-            shadowBlur: 0.8
-            shadowColor: Qt.rgba(0, 0, 0, 0.3)
-        }
-
         Behavior on opacity {
             NumberAnimation {
                 duration: animationDuration
@@ -150,6 +162,6 @@ PanelWindow {
     }
 
     mask: Region {
-        item: osdContainer
+        item: osdBackground
     }
 }

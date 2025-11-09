@@ -1,70 +1,221 @@
-name: Create Release
+# Release from a dispatch event from the danklinux repo
+name: Create Release from DMS
+
 on:
-  push:
-    tags:
-      - 'v*'
+  repository_dispatch:
+    types: [dms_release]
+
+permissions:
+  contents: write
+  actions: write
 
 concurrency:
-  group: release-${{ github.ref_name }}
+  group: release-${{ github.event.client_payload.tag }}
   cancel-in-progress: true
 
 jobs:
-  create_release:
-    name: 📦 Create GitHub Release
+  create_release_from_dms:
     runs-on: ubuntu-24.04
+    env:
+      TAG: ${{ github.event.client_payload.tag }}
+      DMS_REPO: ${{ github.event.client_payload.dms_repo }}
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # Fetch full history for changelog generation
+          fetch-depth: 0
 
-      # Create VERSION file
-      - name: Create VERSION file
+      - name: Ensure VERSION and tag
         run: |
-          echo "${{ github.ref_name }}" > VERSION
-          git config user.name "github-actions[bot]"
+          set -euxo pipefail
+          git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add VERSION
-          git commit -m "Add VERSION file for ${{ github.ref_name }}"
-          git tag -f ${{ github.ref_name }}
-          git push origin ${{ github.ref_name }} --force
 
-      # Generate changelog
+          echo "${TAG}" > VERSION
+
+          git add -A VERSION
+
+          if ! git diff --cached --quiet; then
+            git commit -m "Update VERSION to ${TAG} (from DMS)"
+          fi
+
+          git tag -f "${TAG}"
+
+          git push origin HEAD
+          git push -f origin "${TAG}"
+
       - name: Generate Changelog
         id: changelog
         run: |
-          # Get the previous tag
-          PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
-
+          set -e
+          PREVIOUS_TAG=$(git describe --tags --abbrev=0 "${TAG}^" 2>/dev/null || echo "")
           if [ -z "$PREVIOUS_TAG" ]; then
-            echo "No previous tag found, using all commits"
-            CHANGELOG=$(git log --oneline --pretty=format:"- %s (%h)" | head -50)
+            CHANGELOG=$(git log --oneline --pretty=format:"%an|%s (%h)" | grep -v "^github-actions\[bot\]|" | sed 's/^[^|]*|/- /' | head -50)
           else
-            echo "Generating changelog from $PREVIOUS_TAG to HEAD"
-            CHANGELOG=$(git log --oneline --pretty=format:"- %s (%h)" $PREVIOUS_TAG..HEAD)
+            CHANGELOG=$(git log --oneline --pretty=format:"%an|%s (%h)" "${PREVIOUS_TAG}..${TAG}" | grep -v "^github-actions\[bot\]|" | sed 's/^[^|]*|/- /')
           fi
 
-          # Create the changelog with proper formatting
-          cat > CHANGELOG.md << EOF
+          cat > RELEASE_BODY.md << 'EOF'
+          ## Assets
+
+          ### Complete Packages
+          - **`dms-full-amd64.tar.gz`** - Complete package for x86_64 systems (CLI binaries + QML source + installation guide)
+          - **`dms-full-arm64.tar.gz`** - Complete package for ARM64 systems (CLI binaries + QML source + installation guide)
+
+          ### Individual Components
+          - **`dms-cli-amd64.gz`** - DMS CLI binary for x86_64 systems
+          - **`dms-cli-arm64.gz`** - DMS CLI binary for ARM64 systems
+          - **`dms-distropkg-amd64.gz`** - DMS CLI binary built with distro_package tag for AMD64 systems
+          - **`dms-distropkg-arm64.gz`** - DMS CLI binary built with distro_package tag for ARM64 systems
+          - **`dms-qml.tar.gz`** - QML source code only
+
+          ### Checksums
+          - **`*.sha256`** - SHA256 checksums for verifying download integrity
+
+          **Installation:** Extract the `dms-full-*.tar.gz` package for your architecture and follow the `INSTALL.md` instructions inside.
+
+          ---
+
+          EOF
+
+          cat >> RELEASE_BODY.md << EOF
           ## What's Changed
 
           $CHANGELOG
 
-          **Full Changelog**: https://github.com/${{ github.repository }}/compare/${PREVIOUS_TAG}...${{ github.ref_name }}
+          **Full Changelog**: https://github.com/${{ github.repository }}/compare/${PREVIOUS_TAG}...${TAG}
           EOF
 
-          # Set output for use in release step
           echo "changelog<<EOF" >> $GITHUB_OUTPUT
-          cat CHANGELOG.md >> $GITHUB_OUTPUT
+          cat RELEASE_BODY.md >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
-      # Create GitHub Release
-      - name: Create GitHub Release
-        uses: comnoco/create-release-action@v2.0.5
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Create/Update DankMaterialShell Release
+        uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_name }}
-          release_name: Release ${{ github.ref_name }}
+          tag_name: ${{ env.TAG }}
+          name: Release ${{ env.TAG }}
           body: ${{ steps.changelog.outputs.changelog }}
           draft: false
-          prerelease: ${{ contains(github.ref_name, '-') }}
+          prerelease: ${{ contains(env.TAG, '-') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download and prepare release assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euxo pipefail
+
+          mkdir -p _release_assets
+
+          # Download DMS CLI binaries from the danklinux repo
+          gh release download "${TAG}" -R "${DMS_REPO}" --dir ./_dms_assets
+
+          # Rename CLI binaries to dms-cli-* format and copy distropkg binaries
+          for file in _dms_assets/dms-*.gz*; do
+            if [ -f "$file" ]; then
+              basename=$(basename "$file")
+              if [[ "$basename" == dms-distropkg-* ]]; then
+                cp "$file" "_release_assets/$basename"
+              else
+                newname=$(echo "$basename" | sed 's/^dms-/dms-cli-/')
+                cp "$file" "_release_assets/$newname"
+              fi
+            fi
+          done
+
+          # Create QML source package (exclude .git, .github, build artifacts)
+          tar --exclude='.git' \
+              --exclude='.github' \
+              --exclude='_dms_assets' \
+              --exclude='_release_assets' \
+              --exclude='*.tar.gz' \
+              -czf _release_assets/dms-qml.tar.gz .
+
+          # Generate checksum for QML package
+          (cd _release_assets && sha256sum dms-qml.tar.gz > dms-qml.tar.gz.sha256)
+
+          # Create full packages for each architecture
+          for arch in amd64 arm64; do
+            mkdir -p _temp_full/dms
+            mkdir -p _temp_full/bin
+
+            # Extract QML source to temp directory
+            tar -xzf _release_assets/dms-qml.tar.gz -C _temp_full/dms
+
+            # Copy CLI binary if it exists
+            if [ -f "_dms_assets/dms-${arch}.gz" ]; then
+              gunzip -c "_dms_assets/dms-${arch}.gz" > _temp_full/bin/dms
+              chmod +x _temp_full/bin/dms
+            fi
+
+            # Copy distropkg binary if it exists
+            if [ -f "_dms_assets/dms-distropkg-${arch}.gz" ]; then
+              gunzip -c "_dms_assets/dms-distropkg-${arch}.gz" > _temp_full/bin/dms-distropkg
+              chmod +x _temp_full/bin/dms-distropkg
+            fi
+
+            # Create INSTALL.md
+            cat > _temp_full/INSTALL.md << 'EOF'
+          # DankMaterialShell Installation
+
+          ## Requirements
+
+          - Wayland compositor (niri or Hyprland recommended)
+          - Quickshell framework
+          - Qt6
+
+          ## Installation Steps
+
+          1. **Install quickshell assets:**
+             ```bash
+             mkdir -p ~/.config/quickshell
+             cp -r dms ~/.config/quickshell/
+             ```
+
+          2. **Install the DMS CLI binaries:**
+             ```bash
+             sudo install -m 755 bin/dms /usr/local/bin/dms
+             # or install to a local directory:
+             mkdir -p ~/.local/bin
+             install -m 755 bin/dms ~/.local/bin/dms
+             ```
+
+          3. **Start the shell:**
+             ```bash
+             dms run
+             # or directly with quickshell (will lack some dbus integrations & plugin management):
+             quickshell -p ~/.config/quickshell/dms
+             ```
+
+          ## Configuration
+
+          - Settings are stored in `~/.config/DankMaterialShell/settings.json`
+          - Plugins go in `~/.config/DankMaterialShell/plugins/`
+          - See the documentation in the `dms/` directory for more details
+
+          ## Troubleshooting
+
+          - Run with verbose output: `quickshell -v -p ~/.config/quickshell/dms`
+          - Check logs in `~/.local/state/DankMaterialShell/`
+          - Ensure all dependencies are installed
+          EOF
+
+            # Create the full package
+            (cd _temp_full && tar -czf "../_release_assets/dms-full-${arch}.tar.gz" .)
+
+            # Generate checksum
+            (cd _release_assets && sha256sum "dms-full-${arch}.tar.gz" > "dms-full-${arch}.tar.gz.sha256")
+
+            # Cleanup
+            rm -rf _temp_full
+          done
+
+      - name: Attach all assets to release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.TAG }}
+          files: _release_assets/**
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+

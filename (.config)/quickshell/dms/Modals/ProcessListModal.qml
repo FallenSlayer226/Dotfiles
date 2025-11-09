@@ -9,6 +9,8 @@ import qs.Widgets
 DankModal {
     id: processListModal
 
+    layerNamespace: "dms:process-list-modal"
+
     property int currentTab: 0
     property var tabNames: ["Processes", "Performance", "System"]
 
@@ -44,7 +46,7 @@ DankModal {
     width: 900
     height: 680
     visible: false
-    backgroundColor: Theme.popupBackground()
+    backgroundColor: Theme.withAlpha(Theme.surfaceContainer, Theme.popupTransparency)
     cornerRadius: Theme.cornerRadius
     enableShadow: true
     onBackgroundClicked: () => {
@@ -123,7 +125,7 @@ DankModal {
                     }
 
                     StyledText {
-                        text: "System Monitor Unavailable"
+                        text: I18n.tr("System Monitor Unavailable")
                         font.pixelSize: Theme.fontSizeLarge
                         font.weight: Font.Bold
                         color: Theme.error
@@ -131,7 +133,7 @@ DankModal {
                     }
 
                     StyledText {
-                        text: "The 'dgop' tool is required for system monitoring.\nPlease install dgop to use this feature."
+                        text: I18n.tr("The 'dgop' tool is required for system monitoring.\nPlease install dgop to use this feature.")
                         font.pixelSize: Theme.fontSizeMedium
                         color: Theme.surfaceText
                         anchors.horizontalCenter: parent.horizontalCenter
@@ -154,7 +156,7 @@ DankModal {
                     height: 40
 
                     StyledText {
-                        text: "System Monitor"
+                        text: I18n.tr("System Monitor")
                         font.pixelSize: Theme.fontSizeLarge + 4
                         font.weight: Font.Bold
                         color: Theme.surfaceText
@@ -181,7 +183,7 @@ DankModal {
                 Rectangle {
                     Layout.fillWidth: true
                     height: 52
-                    color: Theme.surfaceContainerHigh
+                    color: Theme.withAlpha(Theme.surfaceContainerHigh, Theme.popupTransparency)
                     radius: Theme.cornerRadius
                     border.color: Theme.outlineLight
                     border.width: 1
@@ -281,7 +283,7 @@ DankModal {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     radius: Theme.cornerRadius
-                    color: Theme.surfaceContainerHigh
+                    color: Theme.withAlpha(Theme.surfaceContainerHigh, Theme.popupTransparency)
                     border.color: Theme.outlineLight
                     border.width: 1
 

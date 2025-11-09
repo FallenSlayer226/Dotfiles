@@ -79,7 +79,8 @@ ListView {
                          const lines = Math.floor(Math.abs(deltaY) / 120)
                          const scrollAmount = (deltaY > 0 ? -lines : lines) * mouseWheelSpeed
                          let newY = listView.contentY + scrollAmount
-                         newY = Math.max(0, Math.min(listView.contentHeight - listView.height, newY))
+                         const maxY = Math.max(0, listView.contentHeight - listView.height + listView.originY)
+                         newY = Math.max(listView.originY, Math.min(maxY, newY))
 
                          if (listView.flicking) {
                              listView.cancelFlick()
@@ -120,7 +121,8 @@ ListView {
                          }
 
                          let newY = listView.contentY - delta
-                         newY = Math.max(0, Math.min(listView.contentHeight - listView.height, newY))
+                         const maxY = Math.max(0, listView.contentHeight - listView.height + listView.originY)
+                         newY = Math.max(listView.originY, Math.min(maxY, newY))
 
                          if (listView.flicking) {
                              listView.cancelFlick()
@@ -153,10 +155,11 @@ ListView {
 
         onTriggered: {
             const newY = contentY - momentumVelocity * 0.016
-            const maxY = Math.max(0, contentHeight - height)
+            const maxY = Math.max(0, contentHeight - height + originY)
+            const minY = originY
 
-            if (newY < 0 || newY > maxY) {
-                contentY = newY < 0 ? 0 : maxY
+            if (newY < minY || newY > maxY) {
+                contentY = newY < minY ? minY : maxY
                 savedY = contentY
                 stop()
                 isMomentumActive = false

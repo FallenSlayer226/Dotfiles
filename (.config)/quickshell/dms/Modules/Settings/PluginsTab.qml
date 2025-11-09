@@ -2,14 +2,20 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import qs.Common
+import qs.Modals.Common
 import qs.Services
 import qs.Widgets
 
-Item {
+FocusScope {
     id: pluginsTab
 
     property string expandedPluginId: ""
+    property bool isRefreshingPlugins: false
+    property var parentModal: null
+    property var installedPluginsData: ({})
+    property bool isReloading: false
 
+    focus: true
 
     DankFlickable {
         anchors.fill: parent
@@ -28,7 +34,7 @@ Item {
                 width: parent.width
                 height: headerColumn.implicitHeight + Theme.spacingL * 2
                 radius: Theme.cornerRadius
-                color: Theme.surfaceContainerHigh
+                color: Theme.withAlpha(Theme.surfaceContainerHigh, Theme.popupTransparency)
                 border.width: 0
 
                 Column {
@@ -54,35 +60,92 @@ Item {
                             spacing: Theme.spacingXS
 
                             StyledText {
-                                text: "Plugin Management"
+                                text: I18n.tr("Plugin Management")
                                 font.pixelSize: Theme.fontSizeLarge
                                 color: Theme.surfaceText
                                 font.weight: Font.Medium
                             }
 
                             StyledText {
-                                text: "Manage and configure plugins for extending DMS functionality"
+                                text: I18n.tr("Manage and configure plugins for extending DMS functionality")
                                 font.pixelSize: Theme.fontSizeSmall
                                 color: Theme.surfaceVariantText
                             }
                         }
                     }
 
-                    Row {
+                    StyledRect {
+                        width: parent.width
+                        height: dmsWarningColumn.implicitHeight + Theme.spacingM * 2
+                        radius: Theme.cornerRadius
+                        color: Qt.rgba(Theme.warning.r, Theme.warning.g, Theme.warning.b, 0.1)
+                        border.color: Theme.warning
+                        border.width: 1
+                        visible: !DMSService.dmsAvailable
+
+                        Column {
+                            id: dmsWarningColumn
+                            anchors.fill: parent
+                            anchors.margins: Theme.spacingM
+                            spacing: Theme.spacingXS
+
+                            Row {
+                                spacing: Theme.spacingXS
+
+                                DankIcon {
+                                    name: "warning"
+                                    size: 16
+                                    color: Theme.warning
+                                    anchors.verticalCenter: parent.verticalCenter
+                                }
+
+                                StyledText {
+                                    text: I18n.tr("DMS Plugin Manager Unavailable")
+                                    font.pixelSize: Theme.fontSizeSmall
+                                    color: Theme.warning
+                                    font.weight: Font.Medium
+                                    anchors.verticalCenter: parent.verticalCenter
+                                }
+                            }
+
+                            StyledText {
+                                text: I18n.tr("The DMS_SOCKET environment variable is not set or the socket is unavailable. Automated plugin management requires the DMS_SOCKET.")
+                                font.pixelSize: Theme.fontSizeSmall - 1
+                                color: Theme.surfaceVariantText
+                                wrapMode: Text.WordWrap
+                                width: parent.width
+                            }
+                        }
+                    }
+
+                    Flow {
                         width: parent.width
                         spacing: Theme.spacingM
 
                         DankButton {
-                            text: "Scan for Plugins"
-                            iconName: "refresh"
+                            text: I18n.tr("Browse")
+                            iconName: "store"
+                            enabled: DMSService.dmsAvailable
                             onClicked: {
-                                PluginService.scanPlugins()
-                                ToastService.showInfo("Scanning for plugins...")
+                                pluginBrowserModal.show()
                             }
                         }
 
                         DankButton {
-                            text: "Create Plugin Directory"
+                            text: I18n.tr("Scan")
+                            iconName: "refresh"
+                            onClicked: {
+                                pluginsTab.isRefreshingPlugins = true
+                                PluginService.scanPlugins()
+                                if (DMSService.dmsAvailable) {
+                                    DMSService.listInstalled()
+                                }
+                                pluginsTab.refreshPluginList()
+                            }
+                        }
+
+                        DankButton {
+                            text: I18n.tr("Create Dir")
                             iconName: "create_new_folder"
                             onClicked: {
                                 PluginService.createPluginDirectory()
@@ -97,7 +160,7 @@ Item {
                 width: parent.width
                 height: directoryColumn.implicitHeight + Theme.spacingL * 2
                 radius: Theme.cornerRadius
-                color: Theme.surfaceContainerHigh
+                color: Theme.withAlpha(Theme.surfaceContainerHigh, Theme.popupTransparency)
                 border.width: 0
 
                 Column {
@@ -108,7 +171,7 @@ Item {
                     spacing: Theme.spacingM
 
                     StyledText {
-                        text: "Plugin Directory"
+                        text: I18n.tr("Plugin Directory")
                         font.pixelSize: Theme.fontSizeLarge
                         color: Theme.surfaceText
                         font.weight: Font.Medium
@@ -122,7 +185,7 @@ Item {
                     }
 
                     StyledText {
-                        text: "Place plugin directories here. Each plugin should have a plugin.json manifest file."
+                        text: I18n.tr("Place plugin directories here. Each plugin should have a plugin.json manifest file.")
                         font.pixelSize: Theme.fontSizeSmall
                         color: Theme.surfaceVariantText
                         wrapMode: Text.WordWrap
@@ -135,7 +198,7 @@ Item {
                 width: parent.width
                 height: Math.max(200, availableColumn.implicitHeight + Theme.spacingL * 2)
                 radius: Theme.cornerRadius
-                color: Theme.surfaceContainerHigh
+                color: Theme.withAlpha(Theme.surfaceContainerHigh, Theme.popupTransparency)
                 border.width: 0
 
                 Column {
@@ -146,7 +209,7 @@ Item {
                     spacing: Theme.spacingM
 
                     StyledText {
-                        text: "Available Plugins"
+                        text: I18n.tr("Available Plugins")
                         font.pixelSize: Theme.fontSizeLarge
                         color: Theme.surfaceText
                         font.weight: Font.Medium
@@ -160,268 +223,30 @@ Item {
                             id: pluginRepeater
                             model: PluginService.getAvailablePlugins()
 
-                            StyledRect {
-                                id: pluginDelegate
-                                width: parent.width
-                                height: pluginItemColumn.implicitHeight + Theme.spacingM * 2 + settingsContainer.height
-                                radius: Theme.cornerRadius
-
-                                property var pluginData: modelData
-                                property string pluginId: pluginData ? pluginData.id : ""
-                                property string pluginName: pluginData ? (pluginData.name || pluginData.id) : ""
-                                property string pluginVersion: pluginData ? (pluginData.version || "1.0.0") : ""
-                                property string pluginAuthor: pluginData ? (pluginData.author || "Unknown") : ""
-                                property string pluginDescription: pluginData ? (pluginData.description || "") : ""
-                                property string pluginIcon: pluginData ? (pluginData.icon || "extension") : "extension"
-                                property string pluginSettingsPath: pluginData ? (pluginData.settingsPath || "") : ""
-                                property var pluginPermissions: pluginData ? (pluginData.permissions || []) : []
-                                property bool hasSettings: pluginData && pluginData.settings !== undefined && pluginData.settings !== ""
-                                property bool isExpanded: pluginsTab.expandedPluginId === pluginId
-
-
-                                color: pluginMouseArea.containsMouse ? Theme.surfacePressed : (isExpanded ? Theme.surfaceContainerHighest : Theme.surfaceContainerHigh)
-                                border.width: 0
-
-                                MouseArea {
-                                    id: pluginMouseArea
-                                    anchors.fill: parent
-                                    anchors.bottomMargin: pluginDelegate.isExpanded ? settingsContainer.height : 0
-                                    hoverEnabled: true
-                                    cursorShape: pluginDelegate.hasSettings ? Qt.PointingHandCursor : Qt.ArrowCursor
-                                    onClicked: {
-                                        if (pluginDelegate.hasSettings) {
-                                            pluginsTab.expandedPluginId = pluginsTab.expandedPluginId === pluginDelegate.pluginId ? "" : pluginDelegate.pluginId
-                                        }
-                                    }
+                            PluginListItem {
+                                pluginData: modelData
+                                expandedPluginId: pluginsTab.expandedPluginId
+                                hasUpdate: {
+                                    if (DMSService.apiVersion < 8) return false
+                                    return pluginsTab.installedPluginsData[pluginId] || pluginsTab.installedPluginsData[pluginName] || false
                                 }
-
-                                Column {
-                                    id: pluginItemColumn
-                                    width: parent.width
-                                    anchors.top: parent.top
-                                    anchors.left: parent.left
-                                    anchors.right: parent.right
-                                    anchors.margins: Theme.spacingM
-                                    spacing: Theme.spacingM
-
-                                    Row {
-                                        width: parent.width
-                                        spacing: Theme.spacingM
-
-                                        DankIcon {
-                                            name: pluginDelegate.pluginIcon
-                                            size: Theme.iconSize
-                                            color: PluginService.isPluginLoaded(pluginDelegate.pluginId) ? Theme.primary : Theme.surfaceVariantText
-                                            anchors.verticalCenter: parent.verticalCenter
-                                        }
-
-                                        Column {
-                                            width: parent.width - Theme.iconSize - Theme.spacingM - toggleRow.width - Theme.spacingM
-                                            spacing: Theme.spacingXS
-                                            anchors.verticalCenter: parent.verticalCenter
-
-                                            Row {
-                                                spacing: Theme.spacingXS
-                                                width: parent.width
-
-                                                StyledText {
-                                                    text: pluginDelegate.pluginName
-                                                    font.pixelSize: Theme.fontSizeLarge
-                                                    color: Theme.surfaceText
-                                                    font.weight: Font.Medium
-                                                    anchors.verticalCenter: parent.verticalCenter
-                                                }
-
-                                                DankIcon {
-                                                    name: pluginDelegate.hasSettings ? (pluginDelegate.isExpanded ? "expand_less" : "expand_more") : ""
-                                                    size: 16
-                                                    color: pluginDelegate.hasSettings ? Theme.primary : "transparent"
-                                                    anchors.verticalCenter: parent.verticalCenter
-                                                    visible: pluginDelegate.hasSettings
-                                                }
-                                            }
-
-                                            StyledText {
-                                                text: "v" + pluginDelegate.pluginVersion + " by " + pluginDelegate.pluginAuthor
-                                                font.pixelSize: Theme.fontSizeSmall
-                                                color: Theme.surfaceVariantText
-                                                width: parent.width
-                                            }
-                                        }
-
-                                        Row {
-                                            id: toggleRow
-                                            anchors.verticalCenter: parent.verticalCenter
-                                            spacing: Theme.spacingXS
-
-                                            Rectangle {
-                                                width: 28
-                                                height: 28
-                                                radius: 14
-                                                color: reloadArea.containsMouse ? Theme.surfaceContainerHighest : "transparent"
-                                                visible: PluginService.isPluginLoaded(pluginDelegate.pluginId)
-
-                                                DankIcon {
-                                                    anchors.centerIn: parent
-                                                    name: "refresh"
-                                                    size: 16
-                                                    color: reloadArea.containsMouse ? Theme.primary : Theme.surfaceVariantText
-                                                }
-
-                                                MouseArea {
-                                                    id: reloadArea
-                                                    anchors.fill: parent
-                                                    hoverEnabled: true
-                                                    cursorShape: Qt.PointingHandCursor
-                                                    onClicked: {
-                                                        const currentPluginId = pluginDelegate.pluginId
-                                                        const currentPluginName = pluginDelegate.pluginName
-                                                        pluginsTab.isReloading = true
-                                                        if (PluginService.reloadPlugin(currentPluginId)) {
-                                                            ToastService.showInfo("Plugin reloaded: " + currentPluginName)
-                                                        } else {
-                                                            ToastService.showError("Failed to reload plugin: " + currentPluginName)
-                                                            pluginsTab.isReloading = false
-                                                        }
-                                                    }
-                                                }
-                                            }
-
-                                            DankToggle {
-                                                id: pluginToggle
-                                                anchors.verticalCenter: parent.verticalCenter
-                                                checked: PluginService.isPluginLoaded(pluginDelegate.pluginId)
-                                                onToggled: isChecked => {
-                                                    const currentPluginId = pluginDelegate.pluginId
-                                                    const currentPluginName = pluginDelegate.pluginName
-
-                                                    if (isChecked) {
-                                                        if (PluginService.enablePlugin(currentPluginId)) {
-                                                            ToastService.showInfo("Plugin enabled: " + currentPluginName)
-                                                        } else {
-                                                            ToastService.showError("Failed to enable plugin: " + currentPluginName)
-                                                            checked = false
-                                                        }
-                                                    } else {
-                                                        if (PluginService.disablePlugin(currentPluginId)) {
-                                                            ToastService.showInfo("Plugin disabled: " + currentPluginName)
-                                                            if (pluginDelegate.isExpanded) {
-                                                                pluginsTab.expandedPluginId = ""
-                                                            }
-                                                        } else {
-                                                            ToastService.showError("Failed to disable plugin: " + currentPluginName)
-                                                            checked = true
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-
-                                    StyledText {
-                                        width: parent.width
-                                        text: pluginDelegate.pluginDescription
-                                        font.pixelSize: Theme.fontSizeSmall
-                                        color: Theme.surfaceVariantText
-                                        wrapMode: Text.WordWrap
-                                        visible: pluginDelegate.pluginDescription !== ""
-                                    }
-
-                                    Flow {
-                                        width: parent.width
-                                        spacing: Theme.spacingXS
-                                        visible: pluginDelegate.pluginPermissions && Array.isArray(pluginDelegate.pluginPermissions) && pluginDelegate.pluginPermissions.length > 0
-
-                                        Repeater {
-                                            model: pluginDelegate.pluginPermissions
-
-                                            Rectangle {
-                                                height: 20
-                                                width: permissionText.implicitWidth + Theme.spacingXS * 2
-                                                radius: 10
-                                                color: Qt.rgba(Theme.primary.r, Theme.primary.g, Theme.primary.b, 0.1)
-                                                border.color: Qt.rgba(Theme.primary.r, Theme.primary.g, Theme.primary.b, 0.3)
-                                                border.width: 1
-
-                                                StyledText {
-                                                    id: permissionText
-                                                    anchors.centerIn: parent
-                                                    text: modelData
-                                                    font.pixelSize: Theme.fontSizeSmall - 1
-                                                    color: Theme.primary
-                                                }
-                                            }
-                                        }
-                                    }
+                                isReloading: pluginsTab.isReloading
+                                onExpandedPluginIdChanged: {
+                                    pluginsTab.expandedPluginId = expandedPluginId
                                 }
-
-                                // Settings container
-                                Item {
-                                    id: settingsContainer
-                                    anchors.bottom: parent.bottom
-                                    anchors.left: parent.left
-                                    anchors.right: parent.right
-                                    height: pluginDelegate.isExpanded && pluginDelegate.hasSettings ? (settingsLoader.item ? settingsLoader.item.implicitHeight + Theme.spacingL * 2 : 0) : 0
-                                    clip: true
-
-                                    Rectangle {
-                                        anchors.fill: parent
-                                        color: Theme.surfaceContainerHighest
-                                        radius: Theme.cornerRadius
-                                        anchors.topMargin: Theme.spacingXS
-                                        border.width: 0
-                                    }
-
-                                    Loader {
-                                        id: settingsLoader
-                                        anchors.fill: parent
-                                        anchors.margins: Theme.spacingL
-                                        active: pluginDelegate.isExpanded && pluginDelegate.hasSettings && PluginService.isPluginLoaded(pluginDelegate.pluginId)
-                                        asynchronous: false
-
-                                        source: {
-                                            if (active && pluginDelegate.pluginSettingsPath) {
-                                                var path = pluginDelegate.pluginSettingsPath
-                                                if (!path.startsWith("file://")) {
-                                                    path = "file://" + path
-                                                }
-                                                return path
-                                            }
-                                            return ""
-                                        }
-
-                                        onLoaded: {
-                                            if (item && typeof PluginService !== "undefined") {
-                                                item.pluginService = PluginService
-                                            }
-                                            if (item && typeof PopoutService !== "undefined") {
-                                                item.popoutService = PopoutService
-                                            }
-                                        }
-                                    }
-
-                                    StyledText {
-                                        anchors.centerIn: parent
-                                        text: !PluginService.isPluginLoaded(pluginDelegate.pluginId) ?
-                                              "Enable plugin to access settings" :
-                                              (settingsLoader.status === Loader.Error ?
-                                               "Failed to load settings" :
-                                               "No configurable settings")
-                                        font.pixelSize: Theme.fontSizeSmall
-                                        color: Theme.surfaceVariantText
-                                        visible: pluginDelegate.isExpanded && (!settingsLoader.active || settingsLoader.status === Loader.Error)
-                                    }
+                                onIsReloadingChanged: {
+                                    pluginsTab.isReloading = isReloading
                                 }
                             }
                         }
 
                         StyledText {
                             width: parent.width
-                            text: "No plugins found.\nPlace plugins in " + PluginService.pluginDirectory
+                            text: I18n.tr("No plugins found.") + "\n" + I18n.tr("Place plugins in") + " " + PluginService.pluginDirectory
                             font.pixelSize: Theme.fontSizeMedium
                             color: Theme.surfaceVariantText
                             horizontalAlignment: Text.AlignHCenter
-                            visible: pluginRepeater.model.length === 0
+                            visible: pluginRepeater.model && pluginRepeater.model.length === 0
                         }
                     }
                 }
@@ -429,21 +254,75 @@ Item {
         }
     }
 
-    property bool isReloading: false
+    function refreshPluginList() {
+        Qt.callLater(() => {
+            var plugins = PluginService.getAvailablePlugins()
+            pluginRepeater.model = null
+            pluginRepeater.model = plugins
+            pluginsTab.isRefreshingPlugins = false
+        })
+    }
 
     Connections {
         target: PluginService
         function onPluginLoaded() {
-            pluginRepeater.model = PluginService.getAvailablePlugins()
+            refreshPluginList()
             if (isReloading) {
                 isReloading = false
             }
         }
         function onPluginUnloaded() {
-            pluginRepeater.model = PluginService.getAvailablePlugins()
+            refreshPluginList()
             if (!isReloading && pluginsTab.expandedPluginId !== "" && !PluginService.isPluginLoaded(pluginsTab.expandedPluginId)) {
                 pluginsTab.expandedPluginId = ""
             }
         }
+        function onPluginListUpdated() {
+            if (DMSService.apiVersion >= 8) {
+                DMSService.listInstalled()
+            }
+            refreshPluginList()
+        }
+    }
+
+    Connections {
+        target: DMSService
+        function onPluginsListReceived(plugins) {
+            pluginBrowserModal.isLoading = false
+            pluginBrowserModal.allPlugins = plugins
+            pluginBrowserModal.updateFilteredPlugins()
+        }
+        function onInstalledPluginsReceived(plugins) {
+            var pluginMap = {}
+            for (var i = 0; i < plugins.length; i++) {
+                var plugin = plugins[i]
+                var hasUpdate = plugin.hasUpdate || false
+                if (plugin.id) {
+                    pluginMap[plugin.id] = hasUpdate
+                }
+                if (plugin.name) {
+                    pluginMap[plugin.name] = hasUpdate
+                }
+            }
+            installedPluginsData = pluginMap
+            Qt.callLater(refreshPluginList)
+        }
+        function onOperationSuccess(message) {
+            ToastService.showInfo(message)
+        }
+        function onOperationError(error) {
+            ToastService.showError(error)
+        }
+    }
+
+    Component.onCompleted: {
+        pluginBrowserModal.parentModal = pluginsTab.parentModal
+        if (DMSService.dmsAvailable && DMSService.apiVersion >= 8) {
+            DMSService.listInstalled()
+        }
+    }
+
+    PluginBrowser {
+        id: pluginBrowserModal
     }
 }

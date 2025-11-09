@@ -1,39 +1,73 @@
 import QtQuick
 import QtQuick.Controls
 import Quickshell
+import Quickshell.Hyprland
 import Quickshell.Io
 import qs.Common
+import qs.Modules.Plugins
 import qs.Modules.ProcessList
 import qs.Services
 import qs.Widgets
 
-Rectangle {
+BasePill {
     id: root
 
-    property bool isVertical: axis?.isVertical ?? false
-    property var axis: null
-    property real widgetThickness: 30
-    readonly property real horizontalPadding: SettingsData.dankBarNoBackground ? 0 : Math.max(Theme.spacingXS, Theme.spacingS * (widgetThickness / 30))
-    property string currentLayout: ""
+    property bool compactMode: SettingsData.keyboardLayoutNameCompactMode
+    property string currentLayout: CompositorService.isNiri ? NiriService.getCurrentKeyboardLayoutName() : ""
     property string hyprlandKeyboard: ""
 
-    width: isVertical ? widgetThickness : (contentRow.implicitWidth + horizontalPadding * 2)
-    height: isVertical ? (contentColumn.implicitHeight + horizontalPadding * 2) : widgetThickness
-    radius: SettingsData.dankBarNoBackground ? 0 : Theme.cornerRadius
-    color: {
-        if (SettingsData.dankBarNoBackground) {
-            return "transparent";
-        }
+    content: Component {
+        Item {
+            implicitWidth: root.isVerticalOrientation ? (root.widgetThickness - root.horizontalPadding * 2) : contentRow.implicitWidth
+            implicitHeight: root.isVerticalOrientation ? contentColumn.implicitHeight : (root.widgetThickness - root.horizontalPadding * 2)
 
-        const baseColor = mouseArea.containsMouse ? Theme.widgetBaseHoverColor : Theme.widgetBaseBackgroundColor;
-        return Qt.rgba(baseColor.r, baseColor.g, baseColor.b, baseColor.a * Theme.widgetTransparency);
+            Column {
+                id: contentColumn
+                visible: root.isVerticalOrientation
+                anchors.centerIn: parent
+                spacing: 1
+
+                DankIcon {
+                    name: "keyboard"
+                    size: Theme.barIconSize(root.barThickness)
+                    color: Theme.surfaceText
+                    anchors.horizontalCenter: parent.horizontalCenter
+                }
+
+                StyledText {
+                    text: {
+                        if (!root.currentLayout) return ""
+                        const parts = root.currentLayout.split(" ")
+                        if (parts.length > 0) {
+                            return parts[0].substring(0, 2).toUpperCase()
+                        }
+                        return root.currentLayout.substring(0, 2).toUpperCase()
+                    }
+                    font.pixelSize: Theme.barTextSize(root.barThickness)
+                    color: Theme.surfaceText
+                    anchors.horizontalCenter: parent.horizontalCenter
+                }
+            }
+
+            Row {
+                id: contentRow
+                visible: !root.isVerticalOrientation
+                anchors.centerIn: parent
+                spacing: Theme.spacingS
+
+                StyledText {
+                    text: root.currentLayout
+                    font.pixelSize: Theme.barTextSize(root.barThickness)
+                    color: Theme.surfaceText
+                    anchors.verticalCenter: parent.verticalCenter
+                }
+            }
+        }
     }
 
     MouseArea {
-        id: mouseArea
-
+        z: 1
         anchors.fill: parent
-        hoverEnabled: true
         cursorShape: Qt.PointingHandCursor
         onClicked: {
             if (CompositorService.isNiri) {
@@ -45,100 +79,70 @@ Rectangle {
                     root.hyprlandKeyboard,
                     "next"
                 ])
+            }
+        }
+    }
+
+    Connections {
+        target: CompositorService.isHyprland ? Hyprland : null
+        enabled: CompositorService.isHyprland
+
+        function onRawEvent(event) {
+            if (event.name === "activelayout") {
                 updateLayout()
             }
         }
     }
 
-    Column {
-        id: contentColumn
-
-        anchors.centerIn: parent
-        spacing: 1
-        visible: root.isVertical
-
-        DankIcon {
-            name: "keyboard"
-            size: Theme.iconSize - 8
-            color: Theme.surfaceText
-            anchors.horizontalCenter: parent.horizontalCenter
+    Component.onCompleted: {
+        if (CompositorService.isHyprland) {
+            updateLayout()
         }
+    }
 
-        StyledText {
-            text: {
-                if (!currentLayout) return ""
-                const parts = currentLayout.split(" ")
-                if (parts.length > 0) {
-                    return parts[0].substring(0, 2).toUpperCase()
+    function updateLayout() {
+        if (CompositorService.isHyprland) {
+            Proc.runCommand(null, ["hyprctl", "-j", "devices"], (output, exitCode) => {
+                if (exitCode !== 0) {
+                    root.currentLayout = "Unknown"
+                    return
                 }
-                return currentLayout.substring(0, 2).toUpperCase()
-            }
-            font.pixelSize: Theme.fontSizeSmall
-            font.weight: Font.Medium
-            color: Theme.surfaceText
-            anchors.horizontalCenter: parent.horizontalCenter
-        }
-    }
-
-    Row {
-        id: contentRow
-
-        anchors.centerIn: parent
-        spacing: Theme.spacingS
-        visible: !root.isVertical
-
-        StyledText {
-            text: currentLayout
-            font.pixelSize: Theme.fontSizeSmall
-            color: Theme.surfaceText
-            anchors.verticalCenter: parent.verticalCenter
-        }
-
-    }
-
-
-    Process {
-        id: hyprlandLayoutProcess
-        running: false
-        command: ["hyprctl", "-j", "devices"]
-        stdout: StdioCollector {
-            onStreamFinished: {
                 try {
-                    const data = JSON.parse(text)
-                    // Find the main keyboard and get its active keymap
+                    const data = JSON.parse(output)
                     const mainKeyboard = data.keyboards.find(kb => kb.main === true)
                     root.hyprlandKeyboard = mainKeyboard.name
-                    if (mainKeyboard && mainKeyboard.active_keymap) {
-                        root.currentLayout = mainKeyboard.active_keymap
+
+                    if (mainKeyboard) {
+    					const layout = mainKeyboard.layout
+    					const variant = mainKeyboard.variant
+    					const index = mainKeyboard.active_layout_index
+
+                        if (root.compactMode && layout && variant && index !== undefined) {
+    						const layouts = mainKeyboard.layout.split(",")
+    						const variants = mainKeyboard.variant.split(",")
+    						const index = mainKeyboard.active_layout_index
+    						
+    						if (layouts[index] && variants[index] !== undefined) {
+    							if (variants[index] === "") {
+    								root.currentLayout = layouts[index]
+                                } else {
+    								root.currentLayout = layouts[index] + "-" + variants[index]
+                                }
+                            } else {
+    							root.currentLayout = "Unknown"
+                            }
+                        } else if (mainKeyboard && mainKeyboard.active_keymap) {
+                            root.currentLayout = mainKeyboard.active_keymap
+                        } else {
+                            root.currentLayout = "Unknown"
+                        }
                     } else {
                         root.currentLayout = "Unknown"
                     }
                 } catch (e) {
                     root.currentLayout = "Unknown"
                 }
-            }
-        }
-    }
-
-    Timer {
-        id: updateTimer
-        interval: 1000
-        running: true
-        repeat: true
-        onTriggered: {
-            updateLayout()
-        }
-    }
-
-    Component.onCompleted: {
-        updateLayout()
-    }
-
-    function updateLayout() {
-        if (CompositorService.isNiri) {
-            root.currentLayout = NiriService.getCurrentKeyboardLayoutName()
-        } else if (CompositorService.isHyprland) {
-            hyprlandLayoutProcess.running = true
+            })
         }
     }
 }

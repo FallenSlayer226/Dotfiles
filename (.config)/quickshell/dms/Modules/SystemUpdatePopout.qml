@@ -11,6 +11,8 @@ import qs.Widgets
 DankPopout {
     id: systemUpdatePopout
 
+    layerNamespace: "dms:system-update"
+
     property var parentWidget: null
     property var triggerScreen: null
 
@@ -20,6 +22,10 @@ DankPopout {
         triggerWidth = width;
         triggerSection = section;
         triggerScreen = screen;
+    }
+
+    Ref {
+        service: SystemUpdateService
     }
 
     popupWidth: 400
@@ -44,7 +50,7 @@ DankPopout {
         Rectangle {
             id: updaterPanel
 
-            color: Theme.popupBackground()
+            color: Theme.withAlpha(Theme.surfaceContainer, Theme.popupTransparency)
             radius: Theme.cornerRadius
             antialiasing: true
             smooth: true
@@ -86,7 +92,7 @@ DankPopout {
                     height: 40
 
                     StyledText {
-                        text: "System Updates"
+                        text: I18n.tr("System Updates")
                         font.pixelSize: Theme.fontSizeLarge
                         color: Theme.surfaceText
                         font.weight: Font.Medium
@@ -171,7 +177,7 @@ DankPopout {
                                     return "Failed to check for updates:\n" + SystemUpdateService.errorMessage;
                                 }
                                 if (!SystemUpdateService.helperAvailable) {
-                                    return "No package manager found. Please install 'paru' or 'yay' to check for updates.";
+                                    return "No package manager found. Please install 'paru' or 'yay' on Arch-based systems to check for updates.";
                                 }
                                 if (SystemUpdateService.isChecking) {
                                     return "Checking for updates...";
@@ -216,7 +222,7 @@ DankPopout {
 
                                     Column {
                                         anchors.verticalCenter: parent.verticalCenter
-                                        width: parent.width - 24 - Theme.spacingM
+                                        width: parent.width - Theme.spacingM
                                         spacing: 2
 
                                         StyledText {
@@ -258,14 +264,14 @@ DankPopout {
                     width: parent.width
                     height: 48
                     spacing: Theme.spacingM
-                    
+
                     Rectangle {
                         width: (parent.width - Theme.spacingM) / 2
                         height: parent.height
                         radius: Theme.cornerRadius
                         color: updateMouseArea.containsMouse ? Theme.primaryHover : Theme.secondaryHover
                         opacity: SystemUpdateService.updateCount > 0 ? 1.0 : 0.5
-                        
+
                         Behavior on color {
                             ColorAnimation { duration: Theme.shortDuration }
                         }
@@ -282,7 +288,7 @@ DankPopout {
                             }
 
                             StyledText {
-                                text: "Update All"
+                                text: I18n.tr("Update All")
                                 font.pixelSize: Theme.fontSizeMedium
                                 font.weight: Font.Medium
                                 color: Theme.primary
@@ -302,14 +308,14 @@ DankPopout {
                             }
                         }
                     }
-                    
+
 
                     Rectangle {
                         width: (parent.width - Theme.spacingM) / 2
                         height: parent.height
                         radius: Theme.cornerRadius
                         color: closeMouseArea.containsMouse ? Theme.errorPressed : Theme.secondaryHover
-                            
+
                         Behavior on color {
                             ColorAnimation { duration: Theme.shortDuration }
                         }
@@ -326,7 +332,7 @@ DankPopout {
                             }
 
                             StyledText {
-                                text: "Close"
+                                text: I18n.tr("Close")
                                 font.pixelSize: Theme.fontSizeMedium
                                 font.weight: Font.Medium
                                 color: Theme.surfaceText

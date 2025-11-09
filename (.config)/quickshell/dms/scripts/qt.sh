@@ -21,11 +21,11 @@ apply_qt_colors() {
         local config_file="$1"
         
         if [ -f "$config_file" ]; then
-            if grep -q '^\\[Appearance\\]' "$config_file"; then
+            if grep -q '^\[Appearance\]' "$config_file"; then
                 if grep -q '^custom_palette=' "$config_file"; then
                     sed -i 's/^custom_palette=.*/custom_palette=true/' "$config_file"
                 else
-                    sed -i '/^\\[Appearance\\]/a custom_palette=true' "$config_file"
+                    sed -i '/^\[Appearance\]/a custom_palette=true' "$config_file"
                 fi
                 
                 if grep -q '^color_scheme_path=' "$config_file"; then

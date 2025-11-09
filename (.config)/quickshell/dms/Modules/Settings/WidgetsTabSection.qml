@@ -22,6 +22,8 @@ Column {
     signal gpuSelectionChanged(string sectionId, int widgetIndex, int selectedIndex)
     signal diskMountSelectionChanged(string sectionId, int widgetIndex, string mountPath)
     signal controlCenterSettingChanged(string sectionId, int widgetIndex, string settingName, bool value)
+    signal minimumWidthChanged(string sectionId, int widgetIndex, bool enabled)
+    signal showSwapChanged(string sectionId, int widgetIndex, bool enabled)
 
     width: parent.width
     height: implicitHeight
@@ -283,12 +285,72 @@ Column {
                             }
                         }
 
+                        DankActionButton {
+                            id: minimumWidthButton
+                            buttonSize: 28
+                            visible: modelData.id === "cpuUsage"
+                                     || modelData.id === "memUsage"
+                                     || modelData.id === "cpuTemp"
+                                     || modelData.id === "gpuTemp"
+                            iconName: "straighten"
+                            iconSize: 16
+                            iconColor: (modelData.minimumWidth !== undefined ? modelData.minimumWidth : true) ? Theme.primary : Theme.outline
+                            onClicked: {
+                                var currentEnabled = modelData.minimumWidth !== undefined ? modelData.minimumWidth : true
+                                root.minimumWidthChanged(root.sectionId, index, !currentEnabled)
+                            }
+                            onEntered: {
+                                minimumWidthTooltipLoader.active = true
+                                if (minimumWidthTooltipLoader.item) {
+                                    var currentEnabled = modelData.minimumWidth !== undefined ? modelData.minimumWidth : true
+                                    const tooltipText = currentEnabled ? "Force Padding" : "Dynamic Width"
+                                    const p = minimumWidthButton.mapToItem(null, minimumWidthButton.width / 2, 0)
+                                    minimumWidthTooltipLoader.item.show(tooltipText, p.x, p.y - 40, null)
+                                }
+                            }
+                            onExited: {
+                                if (minimumWidthTooltipLoader.item) {
+                                    minimumWidthTooltipLoader.item.hide()
+                                }
+                                minimumWidthTooltipLoader.active = false
+                            }
+                        }
+
+                        DankActionButton {
+                            id: showSwapButton
+                            buttonSize: 28
+                            visible: modelData.id === "memUsage"
+                            iconName: "swap_horiz"
+                            iconSize: 16
+                            iconColor: (modelData.showSwap !== undefined ? modelData.showSwap : false) ? Theme.primary : Theme.outline
+                            onClicked: {
+                                var currentEnabled = modelData.showSwap !== undefined ? modelData.showSwap : false
+                                root.showSwapChanged(root.sectionId, index, !currentEnabled)
+                            }
+                            onEntered: {
+                                showSwapTooltipLoader.active = true
+                                if (showSwapTooltipLoader.item) {
+                                    var currentEnabled = modelData.showSwap !== undefined ? modelData.showSwap : false
+                                    const tooltipText = currentEnabled ? "Hide Swap" : "Show Swap"
+                                    const p = showSwapButton.mapToItem(null, showSwapButton.width / 2, 0)
+                                    showSwapTooltipLoader.item.show(tooltipText, p.x, p.y - 40, null)
+                                }
+                            }
+                            onExited: {
+                                if (showSwapTooltipLoader.item) {
+                                    showSwapTooltipLoader.item.hide()
+                                }
+                                showSwapTooltipLoader.active = false
+                            }
+                        }
+
                         Row {
                             spacing: Theme.spacingXS
                             visible: modelData.id === "clock"
                                      || modelData.id === "music"
                                      || modelData.id === "focusedWindow"
                                      || modelData.id === "runningApps"
+									 || modelData.id === "keyboard_layout_name"
 
                             DankActionButton {
                                 id: smallSizeButton
@@ -374,6 +436,7 @@ Column {
                                 visible: modelData.id === "clock"
                                          || modelData.id === "focusedWindow"
                                          || modelData.id === "runningApps"
+										 || modelData.id === "keyboard_layout_name"
                                 iconName: {
                                     if (modelData.id === "clock")
                                         return SettingsData.clockCompactMode ? "zoom_out" : "zoom_in"
@@ -381,6 +444,8 @@ Column {
                                         return SettingsData.focusedWindowCompactMode ? "zoom_out" : "zoom_in"
                                     if (modelData.id === "runningApps")
                                         return SettingsData.runningAppsCompactMode ? "zoom_out" : "zoom_in"
+                                    if (modelData.id === "keyboard_layout_name")
+										return SettingsData.keyboardLayoutNameCompactMode ? "zoom_out" : "zoom_in"
                                     return "zoom_in"
                                 }
                                 iconSize: 16
@@ -391,6 +456,8 @@ Column {
                                         return SettingsData.focusedWindowCompactMode ? Theme.primary : Theme.outline
                                     if (modelData.id === "runningApps")
                                         return SettingsData.runningAppsCompactMode ? Theme.primary : Theme.outline
+                                    if (modelData.id === "keyboard_layout_name")
+                                        return SettingsData.keyboardLayoutNameCompactMode ? Theme.primary : Theme.outline
                                     return Theme.outline
                                 }
                                 onClicked: {
@@ -406,6 +473,10 @@ Column {
                                         root.compactModeChanged(
                                                     "runningApps",
                                                     !SettingsData.runningAppsCompactMode)
+                                    } else if (modelData.id === "keyboard_layout_name") {
+										root.compactModeChanged(
+													"keyboard_layout_name",
+													!SettingsData.keyboardLayoutNameCompactMode)
                                     }
                                 }
                                 onEntered: {
@@ -418,6 +489,8 @@ Column {
                                             tooltipText = SettingsData.focusedWindowCompactMode ? "Full Size" : "Compact"
                                         } else if (modelData.id === "runningApps") {
                                             tooltipText = SettingsData.runningAppsCompactMode ? "Full Size" : "Compact"
+                                        } else  if (modelData.id === "keyboard_layout_name") {
+                                            tooltipText = SettingsData.keyboardLayoutNameCompactMode ? "Full Size" : "Compact"
                                         }
                                         const p = compactModeButton.mapToItem(null, compactModeButton.width / 2, 0)
                                         compactTooltipLoader.item.show(tooltipText, p.x, p.y - 40, null)
@@ -428,6 +501,32 @@ Column {
                                         compactTooltipLoader.item.hide()
                                     }
                                     compactTooltipLoader.active = false
+                                }
+                            }
+
+                            DankActionButton {
+                                id: groupByAppButton
+                                buttonSize: 28
+                                visible: modelData.id === "runningApps"
+                                iconName: "apps"
+                                iconSize: 16
+                                iconColor: SettingsData.runningAppsGroupByApp ? Theme.primary : Theme.outline
+                                onClicked: {
+                                    SettingsData.set("runningAppsGroupByApp", !SettingsData.runningAppsGroupByApp)
+                                }
+                                onEntered: {
+                                    groupByAppTooltipLoader.active = true
+                                    if (groupByAppTooltipLoader.item) {
+                                        const tooltipText = SettingsData.runningAppsGroupByApp ? "Ungroup" : "Group by App"
+                                        const p = groupByAppButton.mapToItem(null, groupByAppButton.width / 2, 0)
+                                        groupByAppTooltipLoader.item.show(tooltipText, p.x, p.y - 40, null)
+                                    }
+                                }
+                                onExited: {
+                                    if (groupByAppTooltipLoader.item) {
+                                        groupByAppTooltipLoader.item.hide()
+                                    }
+                                    groupByAppTooltipLoader.active = false
                                 }
                             }
 
@@ -448,7 +547,7 @@ Column {
                                 StyledText {
                                     id: tooltipText
                                     anchors.centerIn: parent
-                                    text: "Compact Mode"
+                                    text: I18n.tr("Compact Mode")
                                     font.pixelSize: Theme.fontSizeSmall
                                     color: Theme.surfaceText
                                 }
@@ -635,7 +734,7 @@ Column {
         anchors.horizontalCenter: parent.horizontalCenter
 
         StyledText {
-            text: "Add Widget"
+            text: I18n.tr("Add Widget")
             font.pixelSize: Theme.fontSizeSmall
             font.weight: Font.Medium
             color: Theme.primary
@@ -676,17 +775,17 @@ Column {
         modal: true
         focus: true
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
-        
+
         onOpened: {
             console.log("Control Center context menu opened")
         }
-        
+
         onClosed: {
             console.log("Control Center context menu closed")
         }
 
         background: Rectangle {
-            color: Theme.popupBackground()
+            color: Theme.withAlpha(Theme.surfaceContainer, Theme.popupTransparency)
             radius: Theme.cornerRadius
             border.color: Qt.rgba(Theme.outline.r, Theme.outline.g, Theme.outline.b, 0.08)
             border.width: 0
@@ -720,7 +819,7 @@ Column {
                         }
 
                         StyledText {
-                            text: "Network Icon"
+                            text: I18n.tr("Network Icon")
                             font.pixelSize: Theme.fontSizeSmall
                             color: Theme.surfaceText
                             font.weight: Font.Normal
@@ -773,7 +872,7 @@ Column {
                         }
 
                         StyledText {
-                            text: "Bluetooth Icon"
+                            text: I18n.tr("Bluetooth Icon")
                             font.pixelSize: Theme.fontSizeSmall
                             color: Theme.surfaceText
                             font.weight: Font.Normal
@@ -826,7 +925,7 @@ Column {
                         }
 
                         StyledText {
-                            text: "Audio Icon"
+                            text: I18n.tr("Audio Icon")
                             font.pixelSize: Theme.fontSizeSmall
                             color: Theme.surfaceText
                             font.weight: Font.Normal
@@ -889,6 +988,24 @@ Column {
 
     Loader {
         id: visibilityTooltipLoader
+        active: false
+        sourceComponent: DankTooltip {}
+    }
+
+    Loader {
+        id: minimumWidthTooltipLoader
+        active: false
+        sourceComponent: DankTooltip {}
+    }
+
+    Loader {
+        id: groupByAppTooltipLoader
+        active: false
+        sourceComponent: DankTooltip {}
+    }
+
+    Loader {
+        id: showSwapTooltipLoader
         active: false
         sourceComponent: DankTooltip {}
     }

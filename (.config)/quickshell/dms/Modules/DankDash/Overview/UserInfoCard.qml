@@ -58,6 +58,9 @@ Card {
                     text: {
                         if (CompositorService.isNiri) return "on niri"
                         if (CompositorService.isHyprland) return "on Hyprland"
+                        // technically they might not be on mangowc, but its what we support in the docs
+                        if (CompositorService.isDwl) return "on MangoWC"
+                        if (CompositorService.isSway) return "on Sway"
                         return ""
                     }
                     font.pixelSize: Theme.fontSizeSmall
@@ -92,7 +95,7 @@ Card {
                     }
                     // Just using truncated is always true initially idk
                     property bool shouldUseShort: longTextWidth > availableWidth
-                    
+
                     text: shouldUseShort ? UserInfoService.shortUptime : UserInfoService.uptime || "up 1h 23m"
                     font.pixelSize: Theme.fontSizeSmall
                     color: Qt.rgba(Theme.surfaceText.r, Theme.surfaceText.g, Theme.surfaceText.b, 0.7)

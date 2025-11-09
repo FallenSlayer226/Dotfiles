@@ -20,6 +20,7 @@ Singleton {
     property string customThemeFile: ""
     property string matugenScheme: "scheme-tonal-spot"
     property bool use24HourClock: true
+    property bool showSeconds: false
     property bool useFahrenheit: false
     property bool nightModeEnabled: false
     property string weatherLocation: "New York, NY"
@@ -42,6 +43,7 @@ Singleton {
     property bool lockScreenShowPowerActions: true
     property var screenPreferences: ({})
     property int animationSpeed: 2
+    property string wallpaperFillMode: "Fill"
 
     readonly property string defaultFontFamily: "Inter Variable"
     readonly property string defaultMonoFontFamily: "Fira Code"
@@ -54,6 +56,7 @@ Singleton {
                 customThemeFile = settings.customThemeFile !== undefined ? settings.customThemeFile : ""
                 matugenScheme = settings.matugenScheme !== undefined ? settings.matugenScheme : "scheme-tonal-spot"
                 use24HourClock = settings.use24HourClock !== undefined ? settings.use24HourClock : true
+                showSeconds = settings.showSeconds !== undefined ? settings.showSeconds : false
                 useFahrenheit = settings.useFahrenheit !== undefined ? settings.useFahrenheit : false
                 nightModeEnabled = settings.nightModeEnabled !== undefined ? settings.nightModeEnabled : false
                 weatherLocation = settings.weatherLocation !== undefined ? settings.weatherLocation : "New York, NY"
@@ -76,6 +79,7 @@ Singleton {
                 lockScreenShowPowerActions = settings.lockScreenShowPowerActions !== undefined ? settings.lockScreenShowPowerActions : true
                 screenPreferences = settings.screenPreferences !== undefined ? settings.screenPreferences : ({})
                 animationSpeed = settings.animationSpeed !== undefined ? settings.animationSpeed : 2
+                wallpaperFillMode = settings.wallpaperFillMode !== undefined ? settings.wallpaperFillMode : "Fill"
                 settingsLoaded = true
 
                 if (typeof Theme !== "undefined") {

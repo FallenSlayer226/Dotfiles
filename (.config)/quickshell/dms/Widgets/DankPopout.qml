@@ -1,13 +1,15 @@
 import QtQuick
-import QtQuick.Effects
 import Quickshell
+import Quickshell.Hyprland
 import Quickshell.Wayland
 import qs.Common
+import qs.Services
 
 PanelWindow {
     id: root
 
-    WlrLayershell.namespace: "quickshell:popout"
+    property string layerNamespace: "dms:popout"
+    WlrLayershell.namespace: layerNamespace
 
     property alias content: contentLoader.sourceComponent
     property alias contentLoader: contentLoader
@@ -18,9 +20,13 @@ PanelWindow {
     property real triggerWidth: 40
     property string triggerSection: ""
     property string positioning: "center"
-    property int animationDuration: Theme.shortDuration
-    property var animationEasing: Theme.emphasizedEasing
+    property int animationDuration: Theme.expressiveDurations.expressiveDefaultSpatial
+    property real animationScaleCollapsed: 0.96
+    property real animationOffset: Theme.spacingL
+    property list<real> animationEnterCurve: Theme.expressiveCurves.expressiveDefaultSpatial
+    property list<real> animationExitCurve: Theme.expressiveCurves.emphasized
     property bool shouldBeVisible: false
+    property int keyboardFocusMode: WlrKeyboardFocus.OnDemand
 
     signal opened
     signal popoutClosed
@@ -47,7 +53,7 @@ PanelWindow {
 
     Timer {
         id: closeTimer
-        interval: animationDuration + 50
+        interval: animationDuration
         onTriggered: {
             if (!shouldBeVisible) {
                 visible = false
@@ -59,7 +65,7 @@ PanelWindow {
     color: "transparent"
     WlrLayershell.layer: WlrLayershell.Top
     WlrLayershell.exclusiveZone: -1
-    WlrLayershell.keyboardFocus: shouldBeVisible ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None 
+    WlrLayershell.keyboardFocus: shouldBeVisible ? keyboardFocusMode : WlrKeyboardFocus.None 
 
     anchors {
         top: true
@@ -70,37 +76,35 @@ PanelWindow {
 
     readonly property real screenWidth: root.screen.width
     readonly property real screenHeight: root.screen.height
-    readonly property real dpr: root.screen.devicePixelRatio
+    readonly property real dpr: CompositorService.getScreenScale(root.screen)
 
-    readonly property real calculatedX: {
+    readonly property real alignedWidth: Theme.px(popupWidth, dpr)
+    readonly property real alignedHeight: Theme.px(popupHeight, dpr)
+    readonly property real alignedX: Theme.snap((() => {
         if (SettingsData.dankBarPosition === SettingsData.Position.Left) {
-            return triggerY
+            return triggerY + SettingsData.dankBarBottomGap
         } else if (SettingsData.dankBarPosition === SettingsData.Position.Right) {
-            return screenWidth - triggerY - popupWidth
+            return screenWidth - triggerY - SettingsData.dankBarBottomGap - popupWidth
         } else {
             const centerX = triggerX + (triggerWidth / 2) - (popupWidth / 2)
             return Math.max(Theme.popupDistance, Math.min(screenWidth - popupWidth - Theme.popupDistance, centerX))
         }
-    }
-    readonly property real calculatedY: {
+    })(), dpr)
+    readonly property real alignedY: Theme.snap((() => {
         if (SettingsData.dankBarPosition === SettingsData.Position.Left || SettingsData.dankBarPosition === SettingsData.Position.Right) {
             const centerY = triggerX + (triggerWidth / 2) - (popupHeight / 2)
             return Math.max(Theme.popupDistance, Math.min(screenHeight - popupHeight - Theme.popupDistance, centerY))
         } else if (SettingsData.dankBarPosition === SettingsData.Position.Bottom) {
-            return Math.max(Theme.popupDistance, Math.min(screenHeight - popupHeight - Theme.popupDistance, screenHeight - triggerY - popupHeight + Theme.popupDistance))
+            return Math.max(Theme.popupDistance, screenHeight - triggerY - popupHeight)
         } else {
-            return Math.max(Theme.popupDistance, Math.min(screenHeight - popupHeight - Theme.popupDistance, triggerY + Theme.popupDistance))
+            return Math.min(screenHeight - popupHeight - Theme.popupDistance, triggerY)
         }
-    }
-
-    readonly property real alignedWidth: Theme.snap(popupWidth, dpr)
-    readonly property real alignedHeight: Theme.snap(popupHeight, dpr)
-    readonly property real alignedX: Theme.snap(calculatedX, dpr)
-    readonly property real alignedY: Theme.snap(calculatedY, dpr)
+    })(), dpr)
 
     MouseArea {
         anchors.fill: parent
-        enabled: shouldBeVisible
+        enabled: shouldBeVisible && contentLoader.opacity > 0.1
+        acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
         onClicked: mouse => {
             if (mouse.x < alignedX || mouse.x > alignedX + alignedWidth ||
                 mouse.y < alignedY || mouse.y > alignedY + alignedHeight) {
@@ -110,41 +114,90 @@ PanelWindow {
         }
     }
 
-    Loader {
-        id: contentLoader
+    Item {
+        id: contentContainer
         x: alignedX
         y: alignedY
         width: alignedWidth
         height: alignedHeight
-        active: root.visible
-        asynchronous: false
-        opacity: Quickshell.env("DMS_DISABLE_LAYER") === "true" ? (shouldBeVisible ? 1 : 0) : 1
-        layer.enabled: Quickshell.env("DMS_DISABLE_LAYER") !== "true"
-        layer.effect: MultiEffect {
-            source: contentLoader
+
+        readonly property bool barTop: SettingsData.dankBarPosition === SettingsData.Position.Top
+        readonly property bool barBottom: SettingsData.dankBarPosition === SettingsData.Position.Bottom
+        readonly property bool barLeft: SettingsData.dankBarPosition === SettingsData.Position.Left
+        readonly property bool barRight: SettingsData.dankBarPosition === SettingsData.Position.Right
+        readonly property real offsetX: barLeft ? root.animationOffset : (barRight ? -root.animationOffset : 0)
+        readonly property real offsetY: barBottom ? -root.animationOffset : (barTop ? root.animationOffset : 0)
+
+        property real animX: 0
+        property real animY: 0
+        property real scaleValue: root.animationScaleCollapsed
+
+        onOffsetXChanged: animX = Theme.snap(root.shouldBeVisible ? 0 : offsetX, root.dpr)
+        onOffsetYChanged: animY = Theme.snap(root.shouldBeVisible ? 0 : offsetY, root.dpr)
+
+        Connections {
+            target: root
+            function onShouldBeVisibleChanged() {
+                contentContainer.animX = Theme.snap(root.shouldBeVisible ? 0 : contentContainer.offsetX, root.dpr)
+                contentContainer.animY = Theme.snap(root.shouldBeVisible ? 0 : contentContainer.offsetY, root.dpr)
+                contentContainer.scaleValue = root.shouldBeVisible ? 1.0 : root.animationScaleCollapsed
+            }
+        }
+
+        Behavior on animX {
+            NumberAnimation {
+                duration: root.animationDuration
+                easing.type: Easing.BezierSpline
+                easing.bezierCurve: root.shouldBeVisible ? root.animationEnterCurve : root.animationExitCurve
+            }
+        }
+
+        Behavior on animY {
+            NumberAnimation {
+                duration: root.animationDuration
+                easing.type: Easing.BezierSpline
+                easing.bezierCurve: root.shouldBeVisible ? root.animationEnterCurve : root.animationExitCurve
+            }
+        }
+
+        Behavior on scaleValue {
+            NumberAnimation {
+                duration: root.animationDuration
+                easing.type: Easing.BezierSpline
+                easing.bezierCurve: root.shouldBeVisible ? root.animationEnterCurve : root.animationExitCurve
+            }
+        }
+
+        Loader {
+            id: contentLoader
+            anchors.centerIn: parent
+            width: parent.width
+            height: parent.height
+            active: root.visible
+            asynchronous: false
+            layer.enabled: Quickshell.env("DMS_DISABLE_LAYER") !== "true" && Quickshell.env("DMS_DISABLE_LAYER") !== "1"
+            layer.smooth: false
+            layer.textureSize: Qt.size(width * root.dpr, height * root.dpr)
+            layer.textureMirroring: ShaderEffectSource.NoMirroring
             opacity: shouldBeVisible ? 1 : 0
+            visible: opacity > 0
+            scale: contentContainer.scaleValue
+            x: Theme.snap(contentContainer.animX + (parent.width - width) * (1 - contentContainer.scaleValue) * 0.5, root.dpr)
+            y: Theme.snap(contentContainer.animY + (parent.height - height) * (1 - contentContainer.scaleValue) * 0.5, root.dpr)
 
             Behavior on opacity {
                 NumberAnimation {
                     duration: animationDuration
-                    easing.type: animationEasing
+                    easing.type: Easing.BezierSpline
+                    easing.bezierCurve: root.shouldBeVisible ? root.animationEnterCurve : root.animationExitCurve
                 }
-            }
-        }
-
-        Behavior on opacity {
-            NumberAnimation {
-                duration: animationDuration
-                easing.type: animationEasing
             }
         }
     }
 
     Item {
-        x: alignedX
-        y: alignedY
-        width: alignedWidth
-        height: alignedHeight
+        parent: contentContainer
+        anchors.fill: parent
         focus: true
         Keys.onPressed: event => {
             if (event.key === Qt.Key_Escape) {

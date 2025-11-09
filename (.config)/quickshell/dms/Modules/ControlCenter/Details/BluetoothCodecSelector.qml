@@ -83,12 +83,12 @@ Item {
         hoverEnabled: true
         preventStealing: true
         propagateComposedEvents: false
-        
+
         onClicked: root.hide()
         onWheel: (wheel) => { wheel.accepted = true }
         onPositionChanged: (mouse) => { mouse.accepted = true }
     }
-    
+
     Rectangle {
         id: modalBackground
         anchors.fill: parent
@@ -170,7 +170,7 @@ Item {
                     }
 
                     StyledText {
-                        text: "Audio Codec Selection"
+                        text: I18n.tr("Audio Codec Selection")
                         font.pixelSize: Theme.fontSizeSmall
                         color: Theme.surfaceTextMedium
                     }
@@ -206,7 +206,7 @@ Item {
                         radius: Theme.cornerRadius
                         color: {
                             if (modelData.name === currentCodec)
-                                return Theme.surfaceContainerHighest;
+                                return Theme.withAlpha(Theme.surfaceContainerHighest, Theme.popupTransparency);
                             else if (codecMouseArea.containsMouse)
                                 return Theme.surfaceHover;
                             else

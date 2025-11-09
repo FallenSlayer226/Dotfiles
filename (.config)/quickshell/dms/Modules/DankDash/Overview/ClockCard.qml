@@ -35,7 +35,7 @@ Card {
                     width: 28
                     horizontalAlignment: Text.AlignHCenter
                 }
-                
+
                 StyledText {
                     text: {
                         if (SettingsData.use24HourClock) {
@@ -53,7 +53,7 @@ Card {
                     horizontalAlignment: Text.AlignHCenter
                 }
             }
-            
+
             Row {
                 spacing: 0
                 anchors.horizontalCenter: parent.horizontalCenter
@@ -66,7 +66,7 @@ Card {
                     width: 28
                     horizontalAlignment: Text.AlignHCenter
                 }
-                
+
                 StyledText {
                     text: String(systemClock?.date?.getMinutes()).padStart(2, '0').charAt(1)
                     font.pixelSize: 48
@@ -76,8 +76,33 @@ Card {
                     horizontalAlignment: Text.AlignHCenter
                 }
             }
+
+            Row {
+                visible: SettingsData.showSeconds
+                spacing: 0
+                anchors.horizontalCenter: parent.horizontalCenter
+
+                StyledText {
+                    text: String(systemClock?.date?.getSeconds()).padStart(2, '0').charAt(0)
+                    font.pixelSize: 48
+                    color: Theme.primary
+                    font.weight: Font.Medium
+                    width: 28
+                    horizontalAlignment: Text.AlignHCenter
+                }
+
+                StyledText {
+                    text: String(systemClock?.date?.getSeconds()).padStart(2, '0').charAt(1)
+                    font.pixelSize: 48
+                    color: Theme.primary
+                    font.weight: Font.Medium
+                    width: 28
+                    horizontalAlignment: Text.AlignHCenter
+                }
+            }
+
         }
-        
+
         StyledText {
             text: systemClock?.date?.toLocaleDateString(Qt.locale(), "MMM dd")
             font.pixelSize: Theme.fontSizeSmall

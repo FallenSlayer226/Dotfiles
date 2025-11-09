@@ -407,6 +407,21 @@ dms ipc call bar hide
 dms ipc call bar status
 ```
 
+## Target: `systemupdater`
+
+System updater external check request.
+
+### Functions
+
+**`updatestatus`**
+- Trigger a system update check
+- Returns: Success confirmation
+
+### Examples
+```bash
+dms ipc call systemupdater updatestatus
+```
+
 ## Modal Controls
 
 These targets control various modal windows and overlays.
@@ -418,6 +433,12 @@ Application launcher modal control.
 - `open` - Show the spotlight launcher
 - `close` - Hide the spotlight launcher
 - `toggle` - Toggle spotlight launcher visibility
+- `openQuery <query>` - Show the spotlight launcher with pre-filled search query
+  - Parameters: `query` - Search text to pre-fill in the search box
+  - Returns: Success confirmation
+- `toggleQuery <query>` - Toggle spotlight launcher with pre-filled search query
+  - Parameters: `query` - Search text to pre-fill in the search box (only used when opening)
+  - Returns: Success confirmation
 
 ### Target: `clipboard`
 Clipboard history modal control.
@@ -487,12 +508,19 @@ Dashboard popup control with tab selection for overview, media, and weather info
 
 **Functions:**
 - `open [tab]` - Show dashboard popup with optional tab selection
-  - Parameters: `tab` - Optional tab to open: "" (default), "overview", "media", or "weather"
+  - Parameters: `tab` - Tab to open: "", "overview", "media", or "weather"
   - Returns: Success/failure message
 - `close` - Hide dashboard popup
   - Returns: Success/failure message
 - `toggle [tab]` - Toggle dashboard popup visibility with optional tab selection
-  - Parameters: `tab` - Optional tab to open when showing: "" (default), "overview", "media", or "weather"
+  - Parameters: `tab` - Tab to open when showing: "", "overview", "media", or "weather"
+  - Returns: Success/failure message
+
+### Target: `dankdash`
+DankDash wallpaper browser control.
+
+**Functions:**
+- `wallpaper` - Toggle DankDash popup on focused screen with wallpaper tab selected
   - Returns: Success/failure message
 
 ### Target: `file`
@@ -505,10 +533,52 @@ File browser controls for selecting wallpapers and profile images.
   - `profile` - Opens profile image file browser in Pictures directory
   - Both browsers support common image formats (jpg, jpeg, png, bmp, gif, webp)
 
+### Target: `hypr`
+Hyprland-specific controls including keybinds cheatsheet and workspace overview (Hyprland only).
+
+**Functions:**
+- `openBinds` - Show Hyprland keybinds cheatsheet modal
+  - Returns: Success/failure message
+  - Note: Returns "HYPR_NOT_AVAILABLE" if not running Hyprland
+- `closeBinds` - Hide Hyprland keybinds cheatsheet modal
+  - Returns: Success/failure message
+  - Note: Returns "HYPR_NOT_AVAILABLE" if not running Hyprland
+- `toggleBinds` - Toggle Hyprland keybinds cheatsheet modal visibility
+  - Returns: Success/failure message
+  - Note: Returns "HYPR_NOT_AVAILABLE" if not running Hyprland
+- `openOverview` - Show Hyprland workspace overview
+  - Returns: "OVERVIEW_OPEN_SUCCESS" or "HYPR_NOT_AVAILABLE"
+  - Displays all workspaces across all monitors with live window previews
+  - Allows drag-and-drop window movement between workspaces and monitors
+- `closeOverview` - Hide Hyprland workspace overview
+  - Returns: "OVERVIEW_CLOSE_SUCCESS" or "HYPR_NOT_AVAILABLE"
+- `toggleOverview` - Toggle Hyprland workspace overview visibility
+  - Returns: "OVERVIEW_OPEN_SUCCESS", "OVERVIEW_CLOSE_SUCCESS", or "HYPR_NOT_AVAILABLE"
+
+**Keybinds Cheatsheet Description:**
+Displays an auto-categorized cheatsheet of all Hyprland keybinds parsed from `~/.config/hypr`. Keybinds are organized into three columns:
+- **Window / Monitor** - Window and monitor management keybinds (sorted by dispatcher)
+- **Workspace** - Workspace switching and management (sorted by dispatcher)
+- **Execute** - Application launchers and commands (sorted by keybind)
+
+**Workspace Overview Description:**
+Displays a live overview of all workspaces across all monitors with window previews:
+- **Multi-monitor support** - Shows workspaces from all connected monitors with monitor name labels
+- **Live window previews** - Real-time screen capture of all windows on each workspace
+- **Drag-and-drop** - Move windows between workspaces and monitors by dragging
+- **Keyboard navigation** - Use Left/Right arrow keys to switch between workspaces on current monitor
+- **Visual indicators** - Active workspace highlighted when it contains windows
+- **Click to switch** - Click any workspace to switch to it
+- **Click outside or press Escape** - Close the overview
+
 ### Modal Examples
 ```bash
 # Open application launcher
 dms ipc call spotlight toggle
+
+# Open spotlight with pre-filled search
+dms ipc call spotlight openQuery browser
+dms ipc call spotlight toggleQuery "!"
 
 # Show clipboard history
 dms ipc call clipboard open
@@ -533,17 +603,30 @@ dms ipc call dash open overview
 dms ipc call dash toggle media
 dms ipc call dash open weather
 
+# Open wallpaper browser
+dms ipc call dankdash wallpaper
+
 # Open file browsers
 dms ipc call file browse wallpaper
 dms ipc call file browse profile
+
+# Show Hyprland keybinds cheatsheet (Hyprland only)
+dms ipc call hypr toggleBinds
+dms ipc call hypr openBinds
+
+# Show Hyprland workspace overview (Hyprland only)
+dms ipc call hypr toggleOverview
+dms ipc call hypr openOverview
+dms ipc call hypr closeOverview
 ```
 
 ## Common Usage Patterns
 
 ### Keybinding Integration
 
-These IPC commands are designed to be used with window manager keybindings. Example niri configuration:
+These IPC commands are designed to be used with window manager keybindings.
 
+**Example niri configuration:**
 ```kdl
 binds {
     Mod+Space { spawn "qs" "-c" "dms" "ipc" "call" "spotlight" "toggle"; }
@@ -553,6 +636,18 @@ binds {
     XF86AudioRaiseVolume { spawn "qs" "-c" "dms" "ipc" "call" "audio" "increment" "3"; }
     XF86MonBrightnessUp { spawn "qs" "-c" "dms" "ipc" "call" "brightness" "increment" "5" ""; }
 }
+```
+
+**Example Hyprland configuration:**
+```conf
+bind = SUPER, Space, exec, qs -c dms ipc call spotlight toggle
+bind = SUPER, V, exec, qs -c dms ipc call clipboard toggle
+bind = SUPER, P, exec, qs -c dms ipc call notepad toggle
+bind = SUPER, X, exec, qs -c dms ipc call powermenu toggle
+bind = SUPER, slash, exec, qs -c dms ipc call hypr toggleBinds
+bind = SUPER, Tab, exec, qs -c dms ipc call hypr toggleOverview
+bind = , XF86AudioRaiseVolume, exec, qs -c dms ipc call audio increment 3
+bind = , XF86MonBrightnessUp, exec, qs -c dms ipc call brightness increment 5 ""
 ```
 
 ### Scripting and Automation

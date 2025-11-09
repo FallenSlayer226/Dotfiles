@@ -10,7 +10,17 @@ assignees: ""
 
 - [ ] niri
 - [ ] Hyprland
+- [ ] dwl (MangoWC)
+- [ ] sway
 - [ ] other
+
+## Distribution
+
+<!-- Arch, Fedora, Debian, etc. -->
+
+## dms version
+
+<!-- Output of dms version command -->
 
 ## Description
 

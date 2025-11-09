@@ -15,6 +15,7 @@ Item {
     property var contextMenu: null
     property var dockApps: null
     property int index: -1
+    property var parentDockScreen: null
     property bool longPressing: false
     property bool dragging: false
     property point dragStartPos: Qt.point(0, 0)
@@ -26,6 +27,7 @@ Item {
     property bool isHovered: mouseArea.containsMouse && !dragging
     property bool showTooltip: mouseArea.containsMouse && !dragging
     property var cachedDesktopEntry: null
+    property real actualIconSize: 40
 
     function updateDesktopEntry() {
         if (!appData || appData.appId === "__SEPARATOR__") {
@@ -88,9 +90,6 @@ Item {
         return cachedDesktopEntry && cachedDesktopEntry.name ? cachedDesktopEntry.name : appData.appId
     }
 
-    width: 40
-    height: 40
-
     function getToplevelObject() {
         if (!appData) {
             return null
@@ -144,14 +143,27 @@ Item {
         return toplevels
     }
     onIsHoveredChanged: {
+        if (mouseArea.pressed) return
+
         if (isHovered) {
             exitAnimation.stop()
-            if (!bounceAnimation.running)
+            if (!bounceAnimation.running) {
                 bounceAnimation.restart()
+            }
         } else {
             bounceAnimation.stop()
             exitAnimation.restart()
         }
+    }
+
+    readonly property bool animateX: SettingsData.dockPosition === SettingsData.Position.Left || SettingsData.dockPosition === SettingsData.Position.Right
+    readonly property real animationDistance: actualIconSize
+    readonly property real animationDirection: {
+        if (SettingsData.dockPosition === SettingsData.Position.Bottom) return -1
+        if (SettingsData.dockPosition === SettingsData.Position.Top) return 1
+        if (SettingsData.dockPosition === SettingsData.Position.Right) return -1
+        if (SettingsData.dockPosition === SettingsData.Position.Left) return 1
+        return -1
     }
 
     SequentialAnimation {
@@ -160,18 +172,18 @@ Item {
         running: false
 
         NumberAnimation {
-            target: translateY
-            property: "y"
-            to: -10
+            target: iconTransform
+            property: animateX ? "x" : "y"
+            to: animationDirection * animationDistance * 0.25
             duration: Anims.durShort
             easing.type: Easing.BezierSpline
             easing.bezierCurve: Anims.emphasizedAccel
         }
 
         NumberAnimation {
-            target: translateY
-            property: "y"
-            to: -8
+            target: iconTransform
+            property: animateX ? "x" : "y"
+            to: animationDirection * animationDistance * 0.2
             duration: Anims.durShort
             easing.type: Easing.BezierSpline
             easing.bezierCurve: Anims.emphasizedDecel
@@ -182,22 +194,12 @@ Item {
         id: exitAnimation
 
         running: false
-        target: translateY
-        property: "y"
+        target: iconTransform
+        property: animateX ? "x" : "y"
         to: 0
         duration: Anims.durShort
         easing.type: Easing.BezierSpline
         easing.bezierCurve: Anims.emphasizedDecel
-    }
-
-    Rectangle {
-        anchors.fill: parent
-        radius: Theme.cornerRadius
-        color: Qt.rgba(Theme.primary.r, Theme.primary.g, Theme.primary.b, 0.3)
-        border.width: 2
-        border.color: Theme.primary
-        visible: dragging
-        z: -1
     }
 
     Timer {
@@ -216,8 +218,9 @@ Item {
         id: mouseArea
 
         anchors.fill: parent
-        anchors.bottomMargin: -20
         hoverEnabled: true
+        enabled: true
+        preventStealing: true
         cursorShape: longPressing ? Qt.DragMoveCursor : Qt.PointingHandCursor
         acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
         onPressed: mouse => {
@@ -252,7 +255,7 @@ Item {
                                if (dragging) {
                                    dragOffset = Qt.point(mouse.x - dragStartPos.x, mouse.y - dragStartPos.y)
                                    if (dockApps) {
-                                       const threshold = 40
+                                       const threshold = actualIconSize
                                        let newTargetIndex = targetIndex
                                        if (dragOffset.x > threshold && targetIndex < dockApps.pinnedAppCount - 1) {
                                            newTargetIndex = targetIndex + 1
@@ -316,14 +319,27 @@ Item {
                                        console.warn("No toplevel found for grouped app")
                                    }
                                } else {
-                                   // For multiple windows, show context menu (hide pin option for left-click)
                                    if (contextMenu) {
-                                       contextMenu.showForButton(root, appData, 65, true)
+                                       contextMenu.showForButton(root, appData, root.height + 25, true, cachedDesktopEntry, parentDockScreen)
                                    }
                                }
                            }
                        } else if (mouse.button === Qt.MiddleButton) {
-                           if (appData && appData.appId) {
+                           if (appData && appData.type === "window") {
+                               const sortedToplevels = CompositorService.sortedToplevels
+                               for (var i = 0; i < sortedToplevels.length; i++) {
+                                   const toplevel = sortedToplevels[i]
+                                   const checkId = toplevel.title + "|" + (toplevel.appId || "") + "|" + i
+                                   if (checkId === appData.uniqueId) {
+                                       toplevel.close()
+                                       break
+                                   }
+                               }
+                           } else if (appData && appData.type === "grouped") {
+                               if (contextMenu) {
+                                   contextMenu.showForButton(root, appData, root.height, false, cachedDesktopEntry, parentDockScreen)
+                               }
+                           } else if (appData && appData.appId) {
                                const desktopEntry = cachedDesktopEntry
                                if (desktopEntry) {
                                    AppUsageHistoryData.addAppUsage({
@@ -334,12 +350,11 @@ Item {
                                                                        "comment": desktopEntry.comment || ""
                                                                    })
                                }
-                             SessionService.launchDesktopEntry(desktopEntry)
+                               SessionService.launchDesktopEntry(desktopEntry)
                            }
                        } else if (mouse.button === Qt.RightButton) {
                            if (contextMenu && appData) {
-                               console.log("Right-clicked on app:", appData.appId, "type:", appData.type, "windowCount:", appData.windowCount || 0)
-                               contextMenu.showForButton(root, appData, 40, false)
+                               contextMenu.showForButton(root, appData, root.height, false, cachedDesktopEntry, parentDockScreen)
                            } else {
                                console.warn("No context menu or appData available")
                            }
@@ -347,123 +362,225 @@ Item {
                    }
     }
 
-    IconImage {
-        id: iconImg
+    Item {
+        id: visualContent
+        anchors.fill: parent
 
-        anchors.centerIn: parent
-        implicitSize: 40
-        source: {
-            if (appData.appId === "__SEPARATOR__") {
-                return ""
-            }
-            const moddedId = Paths.moddedAppId(appData.appId)
-            if (moddedId.toLowerCase().includes("steam_app")) {
-                return ""
-            }
-            return cachedDesktopEntry && cachedDesktopEntry.icon ? Quickshell.iconPath(cachedDesktopEntry.icon, true) : ""
+        transform: Translate {
+            id: iconTransform
+            x: 0
+            y: 0
         }
-        mipmap: true
-        smooth: true
-        asynchronous: true
-        visible: status === Image.Ready
-    }
 
-    DankIcon {
-        anchors.centerIn: parent
-        size: 40
-        name: "sports_esports"
-        color: Theme.surfaceText
-        visible: {
-            if (!appData || !appData.appId || appData.appId === "__SEPARATOR__") {
-                return false
-            }
-            const moddedId = Paths.moddedAppId(appData.appId)
-            return moddedId.toLowerCase().includes("steam_app")
+        Rectangle {
+            anchors.fill: parent
+            radius: Theme.cornerRadius
+            color: Qt.rgba(Theme.primary.r, Theme.primary.g, Theme.primary.b, 0.3)
+            border.width: 2
+            border.color: Theme.primary
+            visible: dragging
+            z: -1
         }
-    }
 
-    Rectangle {
-        width: 40
-        height: 40
-        anchors.centerIn: parent
-        visible: iconImg.status !== Image.Ready
-        color: Theme.surfaceLight
-        radius: Theme.cornerRadius
-        border.width: 1
-        border.color: Theme.primarySelected
+        IconImage {
+            id: iconImg
 
-        Text {
             anchors.centerIn: parent
-            text: {
-                if (!appData || !appData.appId) {
-                    return "?"
+            implicitSize: actualIconSize
+            source: {
+                if (appData.appId === "__SEPARATOR__") {
+                    return ""
                 }
-
-                const desktopEntry = cachedDesktopEntry
-                if (desktopEntry && desktopEntry.name) {
-                    return desktopEntry.name.charAt(0).toUpperCase()
+                const moddedId = Paths.moddedAppId(appData.appId)
+                if (moddedId.toLowerCase().includes("steam_app")) {
+                    return ""
                 }
-
-                return appData.appId.charAt(0).toUpperCase()
+                return cachedDesktopEntry && cachedDesktopEntry.icon ? Quickshell.iconPath(cachedDesktopEntry.icon, true) : ""
             }
-            font.pixelSize: 14
-            color: Theme.primary
-            font.weight: Font.Bold
+            mipmap: true
+            smooth: true
+            asynchronous: true
+            visible: status === Image.Ready
         }
-    }
 
-    // Indicator for running/focused state
-    Row {
-        anchors.horizontalCenter: parent.horizontalCenter
-        anchors.bottom: parent.bottom
-        anchors.bottomMargin: -2
-        spacing: 2
-        visible: appData && (appData.isRunning || appData.type === "window" || (appData.type === "grouped" && appData.windowCount > 0))
-
-        Repeater {
-            model: {
-                if (!appData) return 0
-                if (appData.type === "grouped") {
-                    return Math.min(appData.windowCount, 4)
-                } else if (appData.type === "window" || appData.isRunning) {
-                    return 1
+        DankIcon {
+            anchors.centerIn: parent
+            size: actualIconSize
+            name: "sports_esports"
+            color: Theme.surfaceText
+            visible: {
+                if (!appData || !appData.appId || appData.appId === "__SEPARATOR__") {
+                    return false
                 }
-                return 0
+                const moddedId = Paths.moddedAppId(appData.appId)
+                return moddedId.toLowerCase().includes("steam_app")
             }
+        }
 
-            Rectangle {
-                width: appData && appData.type === "grouped" && appData.windowCount > 1 ? 4 : 8
-                height: 2
-                radius: 1
-                color: {
-                    if (!appData) {
-                        return "transparent"
+        Rectangle {
+            width: actualIconSize
+            height: actualIconSize
+            anchors.centerIn: parent
+            visible: iconImg.status !== Image.Ready
+            color: Theme.surfaceLight
+            radius: Theme.cornerRadius
+            border.width: 1
+            border.color: Theme.primarySelected
+
+            Text {
+                anchors.centerIn: parent
+                text: {
+                    if (!appData || !appData.appId) {
+                        return "?"
                     }
 
-                    if (appData.type !== "grouped" || appData.windowCount === 1) {
-                        if (isWindowFocused) {
-                            return Theme.primary
+                    const desktopEntry = cachedDesktopEntry
+                    if (desktopEntry && desktopEntry.name) {
+                        return desktopEntry.name.charAt(0).toUpperCase()
+                    }
+
+                    return appData.appId.charAt(0).toUpperCase()
+                }
+                font.pixelSize: Math.max(8, parent.width * 0.35)
+                color: Theme.primary
+                font.weight: Font.Bold
+            }
+        }
+
+        Loader {
+            anchors.horizontalCenter: SettingsData.dockPosition === SettingsData.Position.Left || SettingsData.dockPosition === SettingsData.Position.Right ? undefined : parent.horizontalCenter
+            anchors.verticalCenter: SettingsData.dockPosition === SettingsData.Position.Left || SettingsData.dockPosition === SettingsData.Position.Right ? parent.verticalCenter : undefined
+            anchors.bottom: SettingsData.dockPosition === SettingsData.Position.Bottom ? parent.bottom : undefined
+            anchors.top: SettingsData.dockPosition === SettingsData.Position.Top ? parent.top : undefined
+            anchors.left: SettingsData.dockPosition === SettingsData.Position.Left ? parent.left : undefined
+            anchors.right: SettingsData.dockPosition === SettingsData.Position.Right ? parent.right : undefined
+            anchors.bottomMargin: SettingsData.dockPosition === SettingsData.Position.Bottom ? -(SettingsData.dockSpacing / 2) : 0
+            anchors.topMargin: SettingsData.dockPosition === SettingsData.Position.Top ? -(SettingsData.dockSpacing / 2) : 0
+            anchors.leftMargin: SettingsData.dockPosition === SettingsData.Position.Left ? -(SettingsData.dockSpacing / 2) : 0
+            anchors.rightMargin: SettingsData.dockPosition === SettingsData.Position.Right ? -(SettingsData.dockSpacing / 2) : 0
+
+            sourceComponent: SettingsData.dockPosition === SettingsData.Position.Left || SettingsData.dockPosition === SettingsData.Position.Right ? columnIndicator : rowIndicator
+
+            visible: {
+                if (!appData) return false
+                if (appData.type === "window") return true
+                if (appData.type === "grouped") return appData.windowCount > 0
+                return appData.isRunning
+            }
+        }
+    }
+
+    Component {
+        id: rowIndicator
+
+        Row {
+            spacing: 2
+
+            Repeater {
+                model: {
+                    if (!appData) return 0
+                    if (appData.type === "grouped") {
+                        return Math.min(appData.windowCount, 4)
+                    } else if (appData.type === "window" || appData.isRunning) {
+                        return 1
+                    }
+                    return 0
+                }
+
+                Rectangle {
+                    width: {
+                        if (SettingsData.dockIndicatorStyle === "circle") {
+                            return Math.max(4, actualIconSize * 0.1)
                         }
+                        return appData && appData.type === "grouped" && appData.windowCount > 1 ? Math.max(3, actualIconSize * 0.1) : Math.max(6, actualIconSize * 0.2)
+                    }
+                    height: {
+                        if (SettingsData.dockIndicatorStyle === "circle") {
+                            return Math.max(4, actualIconSize * 0.1)
+                        }
+                        return Math.max(2, actualIconSize * 0.05)
+                    }
+                    radius: SettingsData.dockIndicatorStyle === "circle" ? width / 2 : Theme.cornerRadius
+                    color: {
+                        if (!appData) {
+                            return "transparent"
+                        }
+
+                        if (appData.type !== "grouped" || appData.windowCount === 1) {
+                            if (isWindowFocused) {
+                                return Theme.primary
+                            }
+                            return Qt.rgba(Theme.surfaceText.r, Theme.surfaceText.g, Theme.surfaceText.b, 0.6)
+                        }
+
+                        if (appData.type === "grouped" && appData.windowCount > 1) {
+                            const groupToplevels = getGroupedToplevels()
+                            if (index < groupToplevels.length && groupToplevels[index].activated) {
+                                return Theme.primary
+                            }
+                        }
+
                         return Qt.rgba(Theme.surfaceText.r, Theme.surfaceText.g, Theme.surfaceText.b, 0.6)
                     }
-
-                    if (appData.type === "grouped" && appData.windowCount > 1) {
-                        const groupToplevels = getGroupedToplevels()
-                        if (index < groupToplevels.length && groupToplevels[index].activated) {
-                            return Theme.primary
-                        }
-                    }
-
-                    return Qt.rgba(Theme.surfaceText.r, Theme.surfaceText.g, Theme.surfaceText.b, 0.6)
                 }
             }
         }
     }
 
+    Component {
+        id: columnIndicator
 
-    transform: Translate {
-        id: translateY
+        Column {
+            spacing: 2
 
-        y: 0
+            Repeater {
+                model: {
+                    if (!appData) return 0
+                    if (appData.type === "grouped") {
+                        return Math.min(appData.windowCount, 4)
+                    } else if (appData.type === "window" || appData.isRunning) {
+                        return 1
+                    }
+                    return 0
+                }
+
+                Rectangle {
+                    width: {
+                        if (SettingsData.dockIndicatorStyle === "circle") {
+                            return Math.max(4, actualIconSize * 0.1)
+                        }
+                        return Math.max(2, actualIconSize * 0.05)
+                    }
+                    height: {
+                        if (SettingsData.dockIndicatorStyle === "circle") {
+                            return Math.max(4, actualIconSize * 0.1)
+                        }
+                        return appData && appData.type === "grouped" && appData.windowCount > 1 ? Math.max(3, actualIconSize * 0.1) : Math.max(6, actualIconSize * 0.2)
+                    }
+                    radius: SettingsData.dockIndicatorStyle === "circle" ? width / 2 : Theme.cornerRadius
+                    color: {
+                        if (!appData) {
+                            return "transparent"
+                        }
+
+                        if (appData.type !== "grouped" || appData.windowCount === 1) {
+                            if (isWindowFocused) {
+                                return Theme.primary
+                            }
+                            return Qt.rgba(Theme.surfaceText.r, Theme.surfaceText.g, Theme.surfaceText.b, 0.6)
+                        }
+
+                        if (appData.type === "grouped" && appData.windowCount > 1) {
+                            const groupToplevels = getGroupedToplevels()
+                            if (index < groupToplevels.length && groupToplevels[index].activated) {
+                                return Theme.primary
+                            }
+                        }
+
+                        return Qt.rgba(Theme.surfaceText.r, Theme.surfaceText.g, Theme.surfaceText.b, 0.6)
+                    }
+                }
+            }
+        }
     }
 }

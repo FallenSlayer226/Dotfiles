@@ -1,3 +1,5 @@
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import Quickshell
 import Quickshell.Io
@@ -5,147 +7,96 @@ import Quickshell.Wayland
 import qs.Common
 import qs.Services
 
-Item {
+Scope {
     id: root
-    property string sid: Quickshell.env("XDG_SESSION_ID") || "self"
-    property string sessionPath: ""
 
-    function activate() {
-        loader.activeAsync = true
-    }
+    property string sharedPasswordBuffer: ""
+    property bool shouldLock: false
+    property bool processingExternalEvent: false
 
     Component.onCompleted: {
-        getSessionPath.running = true
+        IdleService.lockComponent = this
     }
 
-    Component.onDestruction: {
-        lockStateMonitor.running = false
+    function lock() {
+        if (SettingsData.customPowerActionLock && SettingsData.customPowerActionLock.length > 0) {
+            Quickshell.execDetached(["sh", "-c", SettingsData.customPowerActionLock])
+            return
+        }
+        if (!processingExternalEvent && SettingsData.loginctlLockIntegration && DMSService.isConnected) {
+            DMSService.lockSession(response => {
+                if (response.error) {
+                    console.warn("Lock: Failed to call loginctl.lock:", response.error)
+                    shouldLock = true
+                }
+            })
+        } else {
+            shouldLock = true
+        }
+    }
+
+    function unlock() {
+        if (!processingExternalEvent && SettingsData.loginctlLockIntegration && DMSService.isConnected) {
+            DMSService.unlockSession(response => {
+                if (response.error) {
+                    console.warn("Lock: Failed to call loginctl.unlock:", response.error)
+                    shouldLock = false
+                }
+            })
+        } else {
+            shouldLock = false
+        }
+    }
+
+    function activate() {
+        lock()
+    }
+
+    Connections {
+        target: SessionService
+
+        function onSessionLocked() {
+            processingExternalEvent = true
+            shouldLock = true
+            processingExternalEvent = false
+        }
+
+        function onSessionUnlocked() {
+            processingExternalEvent = true
+            shouldLock = false
+            processingExternalEvent = false
+        }
     }
 
     Connections {
         target: IdleService
+
         function onLockRequested() {
-            console.log("Lock: Received lock request from IdleService")
-            activate()
+            lock()
         }
     }
 
-    Process {
-        id: getSessionPath
-        command: ["gdbus", "call", "--system", "--dest", "org.freedesktop.login1", "--object-path", "/org/freedesktop/login1", "--method", "org.freedesktop.login1.Manager.GetSession", sid]
-        running: false
+    WlSessionLock {
+        id: sessionLock
 
-        stdout: StdioCollector {
-            onStreamFinished: {
-                const match = text.match(/objectpath '([^']+)'/)
-                if (match) {
-                    root.sessionPath = match[1]
-                    console.log("Found session path:", root.sessionPath)
-                    checkCurrentLockState.running = true
-                    lockStateMonitor.running = true
-                } else {
-                    console.warn("Could not determine session path")
-                }
-            }
-        }
+        locked: shouldLock
 
-        onExited: (exitCode, exitStatus) => {
-                      if (exitCode !== 0) {
-                          console.warn("Failed to get session path, exit code:", exitCode)
-                      }
-                  }
-    }
+        WlSessionLockSurface {
+            id: lockSurface
 
-    Process {
-        id: checkCurrentLockState
-        command: root.sessionPath ? ["gdbus", "call", "--system", "--dest", "org.freedesktop.login1", "--object-path", root.sessionPath, "--method", "org.freedesktop.DBus.Properties.Get", "org.freedesktop.login1.Session", "LockedHint"] : []
-        running: false
-
-        stdout: StdioCollector {
-            onStreamFinished: {
-                if (text.includes("true")) {
-                    console.log("Session is locked on startup, activating lock screen")
-                    loader.activeAsync = true
-                }
-            }
-        }
-
-        onExited: (exitCode, exitStatus) => {
-                      if (exitCode !== 0) {
-                          console.warn("Failed to check initial lock state, exit code:", exitCode)
-                      }
-                  }
-    }
-
-    Process {
-        id: lockStateMonitor
-        command: root.sessionPath ? ["gdbus", "monitor", "--system", "--dest", "org.freedesktop.login1"] : []
-        running: false
-
-        stdout: SplitParser {
-            splitMarker: "\n"
-
-            onRead: line => {
-                        if (line.includes(root.sessionPath)) {
-                            if (line.includes("org.freedesktop.login1.Session.Lock")) {
-                                console.log("login1: Lock signal received -> show lock")
-                                loader.activeAsync = true
-                                return
-                            }
-                            if (line.includes("org.freedesktop.login1.Session.Unlock")) {
-                                console.log("login1: Unlock signal received -> hide lock")
-                                loader.active = false
-                                return
-                            }
-                            if (line.includes("LockedHint") && line.includes("true")) {
-                                console.log("login1: LockedHint=true -> show lock")
-                                loader.activeAsync = true
-                                return
-                            }
-                            if (line.includes("LockedHint") && line.includes("false")) {
-                                console.log("login1: LockedHint=false -> hide lock")
-                                loader.active = false
-                                return
-                            }
-                        }
-                        if (line.includes("PrepareForSleep") && 
-                            line.includes("true") &&
-                            SessionData.lockBeforeSuspend) {
-                            loader.activeAsync = true
-                        }
-                    }
-        }
-
-        onExited: (exitCode, exitStatus) => {
-                      if (exitCode !== 0) {
-                          console.warn("gdbus monitor failed, exit code:", exitCode)
-                      }
-                  }
-    }
-
-    LazyLoader {
-        id: loader
-
-        WlSessionLock {
-            id: sessionLock
-
-            property bool unlocked: false
-            property string sharedPasswordBuffer: ""
-
-            locked: true
-
-            onLockedChanged: {
-                if (!locked) {
-                    loader.active = false
-                }
-            }
+            color: "transparent"
 
             LockSurface {
-                id: lockSurface
+                anchors.fill: parent
                 lock: sessionLock
-                sharedPasswordBuffer: sessionLock.sharedPasswordBuffer
+                sharedPasswordBuffer: root.sharedPasswordBuffer
+                screenName: lockSurface.screen?.name ?? ""
+                isLocked: shouldLock
+                onUnlockRequested: {
+                    root.unlock()
+                }
                 onPasswordChanged: newPassword => {
-                                       sessionLock.sharedPasswordBuffer = newPassword
+                                       root.sharedPasswordBuffer = newPassword
                                    }
             }
         }
@@ -159,17 +110,24 @@ Item {
         target: "lock"
 
         function lock() {
-            console.log("Lock screen requested via IPC")
-            loader.activeAsync = true
+            if (!root.processingExternalEvent && SettingsData.loginctlLockIntegration && DMSService.isConnected) {
+                DMSService.lockSession(response => {
+                    if (response.error) {
+                        console.warn("Lock: Failed to call loginctl.lock:", response.error)
+                        root.shouldLock = true
+                    }
+                })
+            } else {
+                root.shouldLock = true
+            }
         }
 
         function demo() {
-            console.log("Lock screen DEMO mode requested via IPC")
             demoWindow.showDemo()
         }
 
         function isLocked(): bool {
-            return loader.active
+            return sessionLock.locked
         }
     }
 }

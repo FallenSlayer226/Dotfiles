@@ -14,6 +14,7 @@ Item {
 
     signal switchToWeatherTab()
     signal switchToMediaTab()
+    signal closeDash()
 
     Item {
         anchors.fill: parent
@@ -58,6 +59,8 @@ Item {
             y: 100 + Theme.spacingM
             width: parent.width * 0.6
             height: 300
+
+            onCloseDash: root.closeDash()
         }
 
         // Media - bottom right (narrow and taller)

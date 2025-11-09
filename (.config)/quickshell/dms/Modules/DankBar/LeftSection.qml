@@ -11,8 +11,10 @@ Item {
     property var parentScreen: null
     property real widgetThickness: 30
     property real barThickness: 48
+    property bool overrideAxisLayout: false
+    property bool forceVerticalLayout: false
 
-    readonly property bool isVertical: axis?.isVertical ?? false
+    readonly property bool isVertical: overrideAxisLayout ? forceVerticalLayout : (axis?.isVertical ?? false)
 
     implicitHeight: layoutLoader.item ? (layoutLoader.item.implicitHeight || layoutLoader.item.height) : 0
     implicitWidth: layoutLoader.item ? (layoutLoader.item.implicitWidth || layoutLoader.item.width) : 0
@@ -26,10 +28,13 @@ Item {
     Component {
         id: rowComp
         Row {
-            spacing: noBackground ? 2 : Theme.spacingXS
+            readonly property real widgetSpacing: noBackground ? 2 : Theme.spacingXS
+            spacing: widgetSpacing
             Repeater {
+                id: rowRepeater
                 model: root.widgetsModel
                 Item {
+                    readonly property real rowSpacing: parent.widgetSpacing
                     width: widgetLoader.item ? widgetLoader.item.width : 0
                     height: widgetLoader.item ? widgetLoader.item.height : 0
                     WidgetHost {
@@ -45,6 +50,11 @@ Item {
                         parentScreen: root.parentScreen
                         widgetThickness: root.widgetThickness
                         barThickness: root.barThickness
+                        isFirst: model.index === 0
+                        isLast: model.index === rowRepeater.count - 1
+                        sectionSpacing: parent.rowSpacing
+                        isLeftBarEdge: true
+                        isRightBarEdge: false
                     }
                 }
             }
@@ -55,10 +65,13 @@ Item {
         id: columnComp
         Column {
             width: Math.max(parent.width, 200)
-            spacing: noBackground ? 2 : Theme.spacingXS
+            readonly property real widgetSpacing: noBackground ? 2 : Theme.spacingXS
+            spacing: widgetSpacing
             Repeater {
+                id: columnRepeater
                 model: root.widgetsModel
                 Item {
+                    readonly property real columnSpacing: parent.widgetSpacing
                     width: parent.width
                     height: widgetLoader.item ? widgetLoader.item.height : 0
                     WidgetHost {
@@ -74,6 +87,11 @@ Item {
                         parentScreen: root.parentScreen
                         widgetThickness: root.widgetThickness
                         barThickness: root.barThickness
+                        isFirst: model.index === 0
+                        isLast: model.index === columnRepeater.count - 1
+                        sectionSpacing: parent.columnSpacing
+                        isTopBarEdge: true
+                        isBottomBarEdge: false
                     }
                 }
             }

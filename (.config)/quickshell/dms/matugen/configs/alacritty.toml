@@ -1,0 +1,3 @@
+[templates.dmsalacritty]
+input_path = './matugen/templates/alacritty.toml'
+output_path = '~/.config/alacritty/dank-theme.toml'

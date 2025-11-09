@@ -12,42 +12,42 @@ Item {
     property var variantComponents: [{
         "id": "dankBar",
         "name": "Dank Bar",
-        "description": "System bar with widgets and system information",
+        "description": I18n.tr("System bar with widgets and system information"),
         "icon": "toolbar"
     }, {
         "id": "dock",
-        "name": "Application Dock",
-        "description": "Bottom dock for pinned and running applications",
+        "name": I18n.tr("Application Dock"),
+        "description": I18n.tr("Bottom dock for pinned and running applications"),
         "icon": "dock"
     }, {
         "id": "notifications",
-        "name": "Notification Popups",
-        "description": "Notification toast popups",
+        "name": I18n.tr("Notification Popups"),
+        "description": I18n.tr("Notification toast popups"),
         "icon": "notifications"
     }, {
         "id": "wallpaper",
-        "name": "Wallpaper",
-        "description": "Desktop background images",
+        "name": I18n.tr("Wallpaper"),
+        "description": I18n.tr("Desktop background images"),
         "icon": "wallpaper"
     }, {
         "id": "osd",
-        "name": "On-Screen Displays",
-        "description": "Volume, brightness, and other system OSDs",
+        "name": I18n.tr("On-Screen Displays"),
+        "description": I18n.tr("Volume, brightness, and other system OSDs"),
         "icon": "picture_in_picture"
     }, {
         "id": "toast",
-        "name": "Toast Messages",
-        "description": "System toast notifications",
+        "name": I18n.tr("Toast Messages"),
+        "description": I18n.tr("System toast notifications"),
         "icon": "campaign"
     }, {
         "id": "notepad",
-        "name": "Notepad Slideout",
-        "description": "Quick note-taking slideout panel",
+        "name": I18n.tr("Notepad Slideout"),
+        "description": I18n.tr("Quick note-taking slideout panel"),
         "icon": "sticky_note_2"
     }, {
         "id": "systemTray",
-        "name": "System Tray",
-        "description": "System tray icons",
+        "name": I18n.tr("System Tray"),
+        "description": I18n.tr("System tray icons"),
         "icon": "notifications"
     }]
 
@@ -56,10 +56,21 @@ Item {
     }
 
     function setScreenPreferences(componentId, screenNames) {
-        var prefs = SettingsData.screenPreferences || {
-        };
-        prefs[componentId] = screenNames;
-        SettingsData.setScreenPreferences(prefs);
+        var prefs = SettingsData.screenPreferences || {};
+        var newPrefs = Object.assign({}, prefs);
+        newPrefs[componentId] = screenNames;
+        SettingsData.set("screenPreferences", newPrefs);
+    }
+
+    function getShowOnLastDisplay(componentId) {
+        return SettingsData.showOnLastDisplay && SettingsData.showOnLastDisplay[componentId] || false;
+    }
+
+    function setShowOnLastDisplay(componentId, enabled) {
+        var prefs = SettingsData.showOnLastDisplay || {};
+        var newPrefs = Object.assign({}, prefs);
+        newPrefs[componentId] = enabled;
+        SettingsData.set("showOnLastDisplay", newPrefs);
     }
 
     DankFlickable {
@@ -78,9 +89,412 @@ Item {
 
             StyledRect {
                 width: parent.width
+                height: gammaSection.implicitHeight + Theme.spacingL * 2
+                radius: Theme.cornerRadius
+                color: Theme.withAlpha(Theme.surfaceContainerHigh, Theme.popupTransparency)
+                border.color: Qt.rgba(Theme.outline.r, Theme.outline.g, Theme.outline.b, 0.2)
+                border.width: 0
+
+                Column {
+                    id: gammaSection
+
+                    anchors.fill: parent
+                    anchors.margins: Theme.spacingL
+                    spacing: Theme.spacingM
+
+                    Row {
+                        width: parent.width
+                        spacing: Theme.spacingM
+
+                        DankIcon {
+                            name: "brightness_6"
+                            size: Theme.iconSize
+                            color: Theme.primary
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+
+                        StyledText {
+                            text: I18n.tr("Gamma Control")
+                            font.pixelSize: Theme.fontSizeLarge
+                            font.weight: Font.Medium
+                            color: Theme.surfaceText
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+                    }
+
+                    DankToggle {
+                        id: nightModeToggle
+
+                        width: parent.width
+                        text: I18n.tr("Night Mode")
+                        description: DisplayService.gammaControlAvailable ? I18n.tr("Apply warm color temperature to reduce eye strain. Use automation settings below to control when it activates.") : I18n.tr("Gamma control not available. Requires DMS API v6+.")
+                        checked: DisplayService.nightModeEnabled
+                        enabled: DisplayService.gammaControlAvailable
+                        onToggled: checked => {
+                                       DisplayService.toggleNightMode()
+                                   }
+
+                        Connections {
+                            function onNightModeEnabledChanged() {
+                                nightModeToggle.checked = DisplayService.nightModeEnabled
+                            }
+
+                            target: DisplayService
+                        }
+                    }
+
+                    Column {
+                        width: parent.width
+                        spacing: Theme.spacingS
+                        leftPadding: Theme.spacingM
+                        rightPadding: Theme.spacingM
+                        visible: DisplayService.gammaControlAvailable
+
+                        DankDropdown {
+                            width: parent.width - parent.leftPadding - parent.rightPadding
+                            text: I18n.tr("Night Temperature")
+                            description: I18n.tr("Color temperature for night mode")
+                            currentValue: SessionData.nightModeTemperature + "K"
+                            options: {
+                                var temps = []
+                                for (var i = 2500; i <= 6000; i += 500) {
+                                    temps.push(i + "K")
+                                }
+                                return temps
+                            }
+                            onValueChanged: value => {
+                                                var temp = parseInt(value.replace("K", ""))
+                                                SessionData.setNightModeTemperature(temp)
+                                                if (SessionData.nightModeHighTemperature < temp) {
+                                                    SessionData.setNightModeHighTemperature(temp)
+                                                }
+                                            }
+                        }
+
+                        DankDropdown {
+                            width: parent.width - parent.leftPadding - parent.rightPadding
+                            text: I18n.tr("Day Temperature")
+                            description: I18n.tr("Color temperature for day time")
+                            currentValue: SessionData.nightModeHighTemperature + "K"
+                            options: {
+                                var temps = []
+                                var minTemp = SessionData.nightModeTemperature
+                                for (var i = Math.max(2500, minTemp); i <= 10000; i += 500) {
+                                    temps.push(i + "K")
+                                }
+                                return temps
+                            }
+                            onValueChanged: value => {
+                                                var temp = parseInt(value.replace("K", ""))
+                                                if (temp >= SessionData.nightModeTemperature) {
+                                                    SessionData.setNightModeHighTemperature(temp)
+                                                }
+                                            }
+                        }
+                    }
+
+                    DankToggle {
+                        id: automaticToggle
+                        width: parent.width
+                        text: I18n.tr("Automatic Control")
+                        description: I18n.tr("Only adjust gamma based on time or location rules.")
+                        checked: SessionData.nightModeAutoEnabled
+                        visible: DisplayService.gammaControlAvailable
+                        onToggled: checked => {
+                                       if (checked && !DisplayService.nightModeEnabled) {
+                                           DisplayService.toggleNightMode()
+                                       } else if (!checked && DisplayService.nightModeEnabled) {
+                                           DisplayService.toggleNightMode()
+                                       }
+                                       SessionData.setNightModeAutoEnabled(checked)
+                                   }
+
+                        Connections {
+                            target: SessionData
+                            function onNightModeAutoEnabledChanged() {
+                                automaticToggle.checked = SessionData.nightModeAutoEnabled
+                            }
+                        }
+                    }
+
+                    Column {
+                        id: automaticSettings
+                        width: parent.width
+                        spacing: Theme.spacingS
+                        visible: SessionData.nightModeAutoEnabled && DisplayService.gammaControlAvailable
+
+                        Connections {
+                            target: SessionData
+                            function onNightModeAutoEnabledChanged() {
+                                automaticSettings.visible = SessionData.nightModeAutoEnabled
+                            }
+                        }
+
+                        Item {
+                            width: parent.width
+                            height: 45 + Theme.spacingM
+
+                            DankTabBar {
+                                id: modeTabBarNight
+                                width: 200
+                                height: 45
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                model: [{
+                                        "text": "Time",
+                                        "icon": "access_time"
+                                    }, {
+                                        "text": "Location",
+                                        "icon": "place"
+                                    }]
+
+                                Component.onCompleted: {
+                                    currentIndex = SessionData.nightModeAutoMode === "location" ? 1 : 0
+                                    Qt.callLater(updateIndicator)
+                                }
+
+                                onTabClicked: index => {
+                                                  console.log("Tab clicked:", index, "Setting mode to:", index === 1 ? "location" : "time")
+                                                  DisplayService.setNightModeAutomationMode(index === 1 ? "location" : "time")
+                                                  currentIndex = index
+                                              }
+
+                                Connections {
+                                    target: SessionData
+                                    function onNightModeAutoModeChanged() {
+                                        modeTabBarNight.currentIndex = SessionData.nightModeAutoMode === "location" ? 1 : 0
+                                        Qt.callLater(modeTabBarNight.updateIndicator)
+                                    }
+                                }
+                            }
+                        }
+
+                        Column {
+                            width: parent.width
+                            spacing: Theme.spacingM
+                            visible: SessionData.nightModeAutoMode === "time"
+
+                            Column {
+                                spacing: Theme.spacingXS
+                                anchors.horizontalCenter: parent.horizontalCenter
+
+                                Row {
+                                    spacing: Theme.spacingM
+
+                                    StyledText {
+                                        text: ""
+                                        width: 50
+                                        height: 20
+                                    }
+
+                                    StyledText {
+                                        text: I18n.tr("Hour")
+                                        font.pixelSize: Theme.fontSizeSmall
+                                        color: Theme.surfaceVariantText
+                                        width: 70
+                                        horizontalAlignment: Text.AlignHCenter
+                                    }
+
+                                    StyledText {
+                                        text: I18n.tr("Minute")
+                                        font.pixelSize: Theme.fontSizeSmall
+                                        color: Theme.surfaceVariantText
+                                        width: 70
+                                        horizontalAlignment: Text.AlignHCenter
+                                    }
+                                }
+
+                                Row {
+                                    spacing: Theme.spacingM
+
+                                    StyledText {
+                                        text: I18n.tr("Start")
+                                        font.pixelSize: Theme.fontSizeMedium
+                                        color: Theme.surfaceText
+                                        width: 50
+                                        height: 40
+                                        verticalAlignment: Text.AlignVCenter
+                                    }
+
+                                    DankDropdown {
+                                        dropdownWidth: 70
+                                        currentValue: SessionData.nightModeStartHour.toString()
+                                        options: {
+                                            var hours = []
+                                            for (var i = 0; i < 24; i++) {
+                                                hours.push(i.toString())
+                                            }
+                                            return hours
+                                        }
+                                        onValueChanged: value => {
+                                                            SessionData.setNightModeStartHour(parseInt(value))
+                                                        }
+                                    }
+
+                                    DankDropdown {
+                                        dropdownWidth: 70
+                                        currentValue: SessionData.nightModeStartMinute.toString().padStart(2, '0')
+                                        options: {
+                                            var minutes = []
+                                            for (var i = 0; i < 60; i += 5) {
+                                                minutes.push(i.toString().padStart(2, '0'))
+                                            }
+                                            return minutes
+                                        }
+                                        onValueChanged: value => {
+                                                            SessionData.setNightModeStartMinute(parseInt(value))
+                                                        }
+                                    }
+                                }
+
+                                Row {
+                                    spacing: Theme.spacingM
+
+                                    StyledText {
+                                        text: I18n.tr("End")
+                                        font.pixelSize: Theme.fontSizeMedium
+                                        color: Theme.surfaceText
+                                        width: 50
+                                        height: 40
+                                        verticalAlignment: Text.AlignVCenter
+                                    }
+
+                                    DankDropdown {
+                                        dropdownWidth: 70
+                                        currentValue: SessionData.nightModeEndHour.toString()
+                                        options: {
+                                            var hours = []
+                                            for (var i = 0; i < 24; i++) {
+                                                hours.push(i.toString())
+                                            }
+                                            return hours
+                                        }
+                                        onValueChanged: value => {
+                                                            SessionData.setNightModeEndHour(parseInt(value))
+                                                        }
+                                    }
+
+                                    DankDropdown {
+                                        dropdownWidth: 70
+                                        currentValue: SessionData.nightModeEndMinute.toString().padStart(2, '0')
+                                        options: {
+                                            var minutes = []
+                                            for (var i = 0; i < 60; i += 5) {
+                                                minutes.push(i.toString().padStart(2, '0'))
+                                            }
+                                            return minutes
+                                        }
+                                        onValueChanged: value => {
+                                                            SessionData.setNightModeEndMinute(parseInt(value))
+                                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        Column {
+                            property bool isLocationMode: SessionData.nightModeAutoMode === "location"
+                            visible: isLocationMode
+                            spacing: Theme.spacingM
+                            width: parent.width
+
+                            DankToggle {
+                                id: ipLocationToggle
+                                width: parent.width
+                                text: I18n.tr("Use IP Location")
+                                description: I18n.tr("Automatically detect location based on IP address")
+                                checked: SessionData.nightModeUseIPLocation || false
+                                onToggled: checked => {
+                                    SessionData.setNightModeUseIPLocation(checked)
+                                }
+
+                                Connections {
+                                    target: SessionData
+                                    function onNightModeUseIPLocationChanged() {
+                                        ipLocationToggle.checked = SessionData.nightModeUseIPLocation
+                                    }
+                                }
+                            }
+
+                            Column {
+                                width: parent.width
+                                spacing: Theme.spacingM
+                                leftPadding: Theme.spacingM
+                                visible: !SessionData.nightModeUseIPLocation
+
+                                StyledText {
+                                    text: I18n.tr("Manual Coordinates")
+                                    font.pixelSize: Theme.fontSizeMedium
+                                    color: Theme.surfaceText
+                                }
+
+                                Row {
+                                    spacing: Theme.spacingL
+
+                                    Column {
+                                        spacing: Theme.spacingXS
+
+                                        StyledText {
+                                            text: I18n.tr("Latitude")
+                                            font.pixelSize: Theme.fontSizeSmall
+                                            color: Theme.surfaceVariantText
+                                        }
+
+                                        DankTextField {
+                                            width: 120
+                                            height: 40
+                                            text: SessionData.latitude.toString()
+                                            placeholderText: "0.0"
+                                            onEditingFinished: {
+                                                const lat = parseFloat(text)
+                                                if (!isNaN(lat) && lat >= -90 && lat <= 90 && lat !== SessionData.latitude) {
+                                                    SessionData.setLatitude(lat)
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    Column {
+                                        spacing: Theme.spacingXS
+
+                                        StyledText {
+                                            text: I18n.tr("Longitude")
+                                            font.pixelSize: Theme.fontSizeSmall
+                                            color: Theme.surfaceVariantText
+                                        }
+
+                                        DankTextField {
+                                            width: 120
+                                            height: 40
+                                            text: SessionData.longitude.toString()
+                                            placeholderText: "0.0"
+                                            onEditingFinished: {
+                                                const lon = parseFloat(text)
+                                                if (!isNaN(lon) && lon >= -180 && lon <= 180 && lon !== SessionData.longitude) {
+                                                    SessionData.setLongitude(lon)
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                StyledText {
+                                    text: I18n.tr("Uses sunrise/sunset times to automatically adjust night mode based on your location.")
+                                    font.pixelSize: Theme.fontSizeSmall
+                                    color: Theme.surfaceVariantText
+                                    width: parent.width - parent.leftPadding
+                                    wrapMode: Text.WordWrap
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            StyledRect {
+                width: parent.width
                 height: screensInfoSection.implicitHeight + Theme.spacingL * 2
                 radius: Theme.cornerRadius
-                color: Theme.surfaceContainerHigh
+                color: Theme.withAlpha(Theme.surfaceContainerHigh, Theme.popupTransparency)
                 border.color: Qt.rgba(Theme.outline.r, Theme.outline.g, Theme.outline.b, 0.2)
                 border.width: 0
 
@@ -108,14 +522,14 @@ Item {
                             anchors.verticalCenter: parent.verticalCenter
 
                             StyledText {
-                                text: "Connected Displays"
+                                text: I18n.tr("Connected Displays")
                                 font.pixelSize: Theme.fontSizeLarge
                                 font.weight: Font.Medium
                                 color: Theme.surfaceText
                             }
 
                             StyledText {
-                                text: "Configure which displays show shell components"
+                                text: I18n.tr("Configure which displays show shell components")
                                 font.pixelSize: Theme.fontSizeSmall
                                 color: Theme.surfaceVariantText
                                 wrapMode: Text.WordWrap
@@ -131,7 +545,7 @@ Item {
                         spacing: Theme.spacingS
 
                         StyledText {
-                            text: "Available Screens (" + Quickshell.screens.length + ")"
+                            text: I18n.tr("Available Screens (") + Quickshell.screens.length + ")"
                             font.pixelSize: Theme.fontSizeMedium
                             font.weight: Font.Medium
                             color: Theme.surfaceText
@@ -144,7 +558,7 @@ Item {
                                 width: parent.width
                                 height: screenRow.implicitHeight + Theme.spacingS * 2
                                 radius: Theme.cornerRadius
-                                color: Theme.surfaceContainerHigh
+                                color: Theme.withAlpha(Theme.surfaceContainerHigh, Theme.popupTransparency)
                                 border.color: Qt.rgba(Theme.outline.r, Theme.outline.g, Theme.outline.b, 0.3)
                                 border.width: 0
 
@@ -222,7 +636,7 @@ Item {
                         width: parent.width
                         height: componentSection.implicitHeight + Theme.spacingL * 2
                         radius: Theme.cornerRadius
-                        color: Theme.surfaceContainerHigh
+                        color: Theme.withAlpha(Theme.surfaceContainerHigh, Theme.popupTransparency)
                         border.color: Qt.rgba(Theme.outline.r, Theme.outline.g, Theme.outline.b, 0.2)
                         border.width: 0
 
@@ -273,7 +687,7 @@ Item {
                                 spacing: Theme.spacingS
 
                                 StyledText {
-                                    text: "Show on screens:"
+                                    text: I18n.tr("Show on screens:")
                                     font.pixelSize: Theme.fontSizeSmall
                                     color: Theme.surfaceText
                                     font.weight: Font.Medium
@@ -281,21 +695,35 @@ Item {
 
                                 Column {
                                     property string componentId: modelData.id
-                                    property var selectedScreens: displaysTab.getScreenPreferences(componentId)
 
                                     width: parent.width
                                     spacing: Theme.spacingXS
 
                                     DankToggle {
                                         width: parent.width
-                                        text: "All displays"
-                                        description: "Show on all connected displays"
-                                        checked: parent.selectedScreens.includes("all")
+                                        text: I18n.tr("All displays")
+                                        description: I18n.tr("Show on all connected displays")
+                                        checked: displaysTab.getScreenPreferences(parent.componentId).includes("all")
                                         onToggled: (checked) => {
-                                            if (checked)
+                                            if (checked) {
                                                 displaysTab.setScreenPreferences(parent.componentId, ["all"]);
-                                            else
+                                            } else {
                                                 displaysTab.setScreenPreferences(parent.componentId, []);
+                                                if (["dankBar", "dock", "notifications", "osd", "toast"].includes(parent.componentId)) {
+                                                    displaysTab.setShowOnLastDisplay(parent.componentId, true);
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    DankToggle {
+                                        width: parent.width
+                                        text: I18n.tr("Show on Last Display")
+                                        description: I18n.tr("Always show when there's only one connected display")
+                                        checked: displaysTab.getShowOnLastDisplay(parent.componentId)
+                                        visible: !displaysTab.getScreenPreferences(parent.componentId).includes("all") && ["dankBar", "dock", "notifications", "osd", "toast", "notepad", "systemTray"].includes(parent.componentId)
+                                        onToggled: (checked) => {
+                                            displaysTab.setShowOnLastDisplay(parent.componentId, checked);
                                         }
                                     }
 
@@ -304,13 +732,13 @@ Item {
                                         height: 1
                                         color: Theme.outline
                                         opacity: 0.2
-                                        visible: !parent.selectedScreens.includes("all")
+                                        visible: !displaysTab.getScreenPreferences(parent.componentId).includes("all")
                                     }
 
                                     Column {
                                         width: parent.width
                                         spacing: Theme.spacingXS
-                                        visible: !parent.selectedScreens.includes("all")
+                                        visible: !displaysTab.getScreenPreferences(parent.componentId).includes("all")
 
                                         Repeater {
                                             model: Quickshell.screens

@@ -10,10 +10,14 @@ Rectangle {
     property var appLauncher: null
     property var contextMenu: null
 
-    width: parent.width
-    height: parent.height - y
+    function resetScroll() {
+        resultsList.contentY = 0
+        resultsGrid.contentY = 0
+    }
+
     radius: Theme.cornerRadius
     color: "transparent"
+    clip: true
 
     DankListView {
         id: resultsList
@@ -69,99 +73,22 @@ Rectangle {
                                        appLauncher.keyboardNavigationActive = false
                                    }
 
-        delegate: Rectangle {
-            width: ListView.view.width
-            height: resultsList.itemHeight
-            radius: Theme.cornerRadius
-            color: ListView.isCurrentItem ? Theme.primaryPressed : listMouseArea.containsMouse ? Theme.primaryHoverLight : Theme.surfaceContainerHigh
-
-            Row {
-                anchors.fill: parent
-                anchors.margins: Theme.spacingM
-                spacing: Theme.spacingL
-
-                Item {
-                    width: resultsList.iconSize
-                    height: resultsList.iconSize
-                    anchors.verticalCenter: parent.verticalCenter
-
-                    IconImage {
-                        id: listIconImg
-
-                        anchors.fill: parent
-                        source: Quickshell.iconPath(model.icon, true)
-                        asynchronous: true
-                        visible: status === Image.Ready
-                    }
-
-                    Rectangle {
-                        anchors.fill: parent
-                        visible: !listIconImg.visible
-                        color: Theme.surfaceLight
-                        radius: Theme.cornerRadius
-                        border.width: 1
-                        border.color: Theme.primarySelected
-
-                        StyledText {
-                            anchors.centerIn: parent
-                            text: (model.name && model.name.length > 0) ? model.name.charAt(0).toUpperCase() : "A"
-                            font.pixelSize: resultsList.iconSize * 0.4
-                            color: Theme.primary
-                            font.weight: Font.Bold
-                        }
-                    }
-                }
-
-                Column {
-                    anchors.verticalCenter: parent.verticalCenter
-                    width: parent.width - resultsList.iconSize - Theme.spacingL
-                    spacing: Theme.spacingXS
-
-                    StyledText {
-                        width: parent.width
-                        text: model.name || ""
-                        font.pixelSize: Theme.fontSizeLarge
-                        color: Theme.surfaceText
-                        font.weight: Font.Medium
-                        elide: Text.ElideRight
-                    }
-
-                    StyledText {
-                        width: parent.width
-                        text: model.comment || "Application"
-                        font.pixelSize: Theme.fontSizeMedium
-                        color: Theme.surfaceVariantText
-                        elide: Text.ElideRight
-                        maximumLineCount: 1
-                        visible: resultsList.showDescription && model.comment && model.comment.length > 0
-                    }
-                }
+        delegate: AppLauncherListDelegate {
+            listView: resultsList
+            itemHeight: resultsList.itemHeight
+            iconSize: resultsList.iconSize
+            showDescription: resultsList.showDescription
+            hoverUpdatesSelection: resultsList.hoverUpdatesSelection
+            keyboardNavigationActive: resultsList.keyboardNavigationActive
+            isCurrentItem: ListView.isCurrentItem
+            iconMaterialSizeAdjustment: 0
+            iconUnicodeScale: 0.8
+            onItemClicked: (idx, modelData) => resultsList.itemClicked(idx, modelData)
+            onItemRightClicked: (idx, modelData, mouseX, mouseY) => {
+                const modalPos = resultsContainer.parent.mapFromItem(null, mouseX, mouseY)
+                resultsList.itemRightClicked(idx, modelData, modalPos.x, modalPos.y)
             }
-
-            MouseArea {
-                id: listMouseArea
-
-                anchors.fill: parent
-                hoverEnabled: true
-                cursorShape: Qt.PointingHandCursor
-                acceptedButtons: Qt.LeftButton | Qt.RightButton
-                z: 10
-                onEntered: () => {
-                               if (resultsList.hoverUpdatesSelection && !resultsList.keyboardNavigationActive)
-                               resultsList.currentIndex = index
-                           }
-                onPositionChanged: () => {
-                                       resultsList.keyboardNavigationReset()
-                                   }
-                onClicked: mouse => {
-                               if (mouse.button === Qt.LeftButton) {
-                                   resultsList.itemClicked(index, model)
-                               } else if (mouse.button === Qt.RightButton) {
-                                   const modalPos = mapToItem(resultsContainer.parent, mouse.x, mouse.y)
-                                   resultsList.itemRightClicked(index, model, modalPos.x, modalPos.y)
-                               }
-                           }
-            }
+            onKeyboardNavigationReset: resultsList.keyboardNavigationReset
         }
     }
 
@@ -230,89 +157,23 @@ Rectangle {
                                        appLauncher.keyboardNavigationActive = false
                                    }
 
-        delegate: Rectangle {
-            width: resultsGrid.cellWidth - resultsGrid.cellPadding
-            height: resultsGrid.cellHeight - resultsGrid.cellPadding
-            radius: Theme.cornerRadius
-            color: resultsGrid.currentIndex === index ? Theme.primaryPressed : gridMouseArea.containsMouse ? Theme.primaryHoverLight : Theme.surfaceContainerHigh
-
-            Column {
-                anchors.centerIn: parent
-                spacing: Theme.spacingS
-
-                Item {
-                    property int iconSize: Math.min(resultsGrid.maxIconSize, Math.max(resultsGrid.minIconSize, resultsGrid.cellWidth * resultsGrid.iconSizeRatio))
-
-                    width: iconSize
-                    height: iconSize
-                    anchors.horizontalCenter: parent.horizontalCenter
-
-                    IconImage {
-                        id: gridIconImg
-
-                        anchors.fill: parent
-                        source: Quickshell.iconPath(model.icon, true)
-                        smooth: true
-                        asynchronous: true
-                        visible: status === Image.Ready
-                    }
-
-                    Rectangle {
-                        anchors.fill: parent
-                        visible: !gridIconImg.visible
-                        color: Theme.surfaceLight
-                        radius: Theme.cornerRadius
-                        border.width: 1
-                        border.color: Theme.primarySelected
-
-                        StyledText {
-                            anchors.centerIn: parent
-                            text: (model.name && model.name.length > 0) ? model.name.charAt(0).toUpperCase() : "A"
-                            font.pixelSize: Math.min(28, parent.width * 0.5)
-                            color: Theme.primary
-                            font.weight: Font.Bold
-                        }
-                    }
-                }
-
-                StyledText {
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    width: resultsGrid.cellWidth - 12
-                    text: model.name || ""
-                    font.pixelSize: Theme.fontSizeSmall
-                    color: Theme.surfaceText
-                    font.weight: Font.Medium
-                    elide: Text.ElideRight
-                    horizontalAlignment: Text.AlignHCenter
-                    maximumLineCount: 2
-                    wrapMode: Text.WordWrap
-                }
+        delegate: AppLauncherGridDelegate {
+            gridView: resultsGrid
+            cellWidth: resultsGrid.cellWidth
+            cellHeight: resultsGrid.cellHeight
+            cellPadding: resultsGrid.cellPadding
+            minIconSize: resultsGrid.minIconSize
+            maxIconSize: resultsGrid.maxIconSize
+            iconSizeRatio: resultsGrid.iconSizeRatio
+            hoverUpdatesSelection: resultsGrid.hoverUpdatesSelection
+            keyboardNavigationActive: resultsGrid.keyboardNavigationActive
+            currentIndex: resultsGrid.currentIndex
+            onItemClicked: (idx, modelData) => resultsGrid.itemClicked(idx, modelData)
+            onItemRightClicked: (idx, modelData, mouseX, mouseY) => {
+                const modalPos = resultsContainer.parent.mapFromItem(null, mouseX, mouseY)
+                resultsGrid.itemRightClicked(idx, modelData, modalPos.x, modalPos.y)
             }
-
-            MouseArea {
-                id: gridMouseArea
-
-                anchors.fill: parent
-                hoverEnabled: true
-                cursorShape: Qt.PointingHandCursor
-                acceptedButtons: Qt.LeftButton | Qt.RightButton
-                z: 10
-                onEntered: () => {
-                               if (resultsGrid.hoverUpdatesSelection && !resultsGrid.keyboardNavigationActive)
-                               resultsGrid.currentIndex = index
-                           }
-                onPositionChanged: () => {
-                                       resultsGrid.keyboardNavigationReset()
-                                   }
-                onClicked: mouse => {
-                               if (mouse.button === Qt.LeftButton) {
-                                   resultsGrid.itemClicked(index, model)
-                               } else if (mouse.button === Qt.RightButton) {
-                                   const modalPos = mapToItem(resultsContainer.parent, mouse.x, mouse.y)
-                                   resultsGrid.itemRightClicked(index, model, modalPos.x, modalPos.y)
-                               }
-                           }
-            }
+            onKeyboardNavigationReset: resultsGrid.keyboardNavigationReset
         }
     }
 }

@@ -20,11 +20,12 @@ Item {
     property int popupWidth: 0
     property bool alignPopupRight: false
     property int dropdownWidth: 200
+    property bool compactMode: text === "" && description === ""
 
     signal valueChanged(string value)
 
-    width: parent.width
-    implicitHeight: Math.max(60, labelColumn.implicitHeight + Theme.spacingM)
+    width: compactMode ? dropdownWidth : parent.width
+    implicitHeight: compactMode ? 40 : Math.max(60, labelColumn.implicitHeight + Theme.spacingM)
 
     Component.onDestruction: {
         const popup = dropdownMenu
@@ -41,6 +42,7 @@ Item {
         anchors.verticalCenter: parent.verticalCenter
         anchors.rightMargin: Theme.spacingL
         spacing: Theme.spacingXS
+        visible: !root.compactMode
 
         StyledText {
             text: root.text
@@ -62,12 +64,12 @@ Item {
     Rectangle {
         id: dropdown
 
-        width: root.popupWidth === -1 ? undefined : (root.popupWidth > 0 ? root.popupWidth : root.dropdownWidth)
+        width: root.compactMode ? parent.width : (root.popupWidth === -1 ? undefined : (root.popupWidth > 0 ? root.popupWidth : root.dropdownWidth))
         height: 40
         anchors.right: parent.right
         anchors.verticalCenter: parent.verticalCenter
         radius: Theme.cornerRadius
-        color: dropdownArea.containsMouse || dropdownMenu.visible ? Theme.surfaceContainerHigh : Theme.surfaceContainer
+        color: dropdownArea.containsMouse || dropdownMenu.visible ? Theme.surfaceContainerHigh : Theme.withAlpha(Theme.surfaceContainer, Theme.popupTransparency)
         border.color: dropdownMenu.visible ? Theme.primary : Qt.rgba(Theme.outline.r, Theme.outline.g, Theme.outline.b, 0.2)
         border.width: dropdownMenu.visible ? 2 : 1
 
@@ -143,6 +145,7 @@ Item {
                 anchors.verticalCenter: parent.verticalCenter
                 width: contentRow.width - (contentRow.children[0].visible ? contentRow.children[0].width + contentRow.spacing : 0)
                 elide: Text.ElideRight
+                wrapMode: Text.NoWrap
             }
         }
 
@@ -219,6 +222,7 @@ Item {
         height: Math.min(root.maxPopupHeight, (root.enableFuzzySearch ? 54 : 0) + Math.min(filteredOptions.length, 10) * 36 + 16)
         padding: 0
         modal: true
+        dim: false
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
 
         background: Rectangle {
@@ -250,14 +254,14 @@ Item {
                     height: 42
                     visible: root.enableFuzzySearch
                     radius: Theme.cornerRadius
-                    color: Theme.surfaceContainerHigh
+                    color: Theme.withAlpha(Theme.surfaceContainerHigh, Theme.popupTransparency)
 
                     DankTextField {
                         id: searchField
 
                         anchors.fill: parent
                         anchors.margins: 1
-                        placeholderText: "Search..."
+                        placeholderText: I18n.tr("Search...")
                         text: dropdownMenu.searchQuery
                         topPadding: Theme.spacingS
                         bottomPadding: Theme.spacingS

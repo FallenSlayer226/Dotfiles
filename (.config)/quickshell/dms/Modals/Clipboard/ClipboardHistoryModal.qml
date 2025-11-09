@@ -12,6 +12,8 @@ import qs.Widgets
 DankModal {
     id: clipboardHistoryModal
 
+    layerNamespace: "dms:clipboard"
+
     property int totalCount: 0
     property var clipboardEntries: []
     property string searchText: ""
@@ -60,6 +62,7 @@ DankModal {
         open()
         clipboardHistoryModal.searchText = ""
         clipboardHistoryModal.activeImageLoads = 0
+        clipboardHistoryModal.shouldHaveFocus = true
         refreshClipboard()
         keyboardController.reset()
 
@@ -91,7 +94,7 @@ DankModal {
     function copyEntry(entry) {
         const entryId = entry.split('\t')[0]
         Quickshell.execDetached(["sh", "-c", `cliphist decode ${entryId} | wl-copy`])
-        ToastService.showInfo("Copied to clipboard")
+        ToastService.showInfo(I18n.tr("Copied to clipboard"))
         hide()
     }
 
@@ -135,7 +138,7 @@ DankModal {
     visible: false
     width: ClipboardConstants.modalWidth
     height: ClipboardConstants.modalHeight
-    backgroundColor: Theme.popupBackground()
+    backgroundColor: Theme.withAlpha(Theme.surfaceContainer, Theme.popupTransparency)
     cornerRadius: Theme.cornerRadius
     borderColor: Theme.outlineMedium
     borderWidth: 1
@@ -153,7 +156,7 @@ DankModal {
 
     ConfirmModal {
         id: clearConfirmDialog
-        confirmButtonText: "Clear All"
+        confirmButtonText: I18n.tr("Clear All")
         confirmButtonColor: Theme.primary
         onVisibleChanged: {
             if (visible) {

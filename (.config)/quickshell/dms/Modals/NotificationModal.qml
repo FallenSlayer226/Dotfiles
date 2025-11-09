@@ -9,6 +9,8 @@ import qs.Widgets
 DankModal {
     id: notificationModal
 
+    layerNamespace: "dms:notification-modal"
+
     property bool notificationModalOpen: false
     property var notificationListRef: null
 
@@ -20,7 +22,7 @@ DankModal {
         if (modalKeyboardController && notificationListRef) {
             modalKeyboardController.listView = notificationListRef
             modalKeyboardController.rebuildFlatNavigation()
-            
+
             Qt.callLater(() => {
                 modalKeyboardController.keyboardNavigationActive = true
                 modalKeyboardController.selectedFlatIndex = 0
@@ -54,6 +56,9 @@ DankModal {
     height: 700
     visible: false
     onBackgroundClicked: hide()
+    onOpened: () => {
+        Qt.callLater(() => modalFocusScope.forceActiveFocus());
+    }
     onShouldBeVisibleChanged: (shouldBeVisible) => {
         if (!shouldBeVisible) {
             notificationModalOpen = false

@@ -14,9 +14,18 @@ Item {
     property int pinnedAppCount: 0
     property bool groupByApp: false
     property bool isVertical: false
+    property var dockScreen: null
+    property real iconSize: 40
 
+    clip: false
     implicitWidth: isVertical ? appLayout.height : appLayout.width
     implicitHeight: isVertical ? appLayout.width : appLayout.height
+
+    // Helper function to normalize appId using Paths.moddedAppId
+    function normalizeAppId(appId) {
+        if (!appId) return ""
+        return Paths.moddedAppId(appId).toLowerCase().trim()
+    }
 
     function movePinnedApp(fromIndex, toIndex) {
         if (fromIndex === toIndex) {
@@ -36,14 +45,18 @@ Item {
 
     Item {
         id: appLayout
-        anchors.centerIn: parent
         width: layoutFlow.width
         height: layoutFlow.height
+        anchors.horizontalCenter: root.isVertical ? undefined : parent.horizontalCenter
+        anchors.verticalCenter: root.isVertical ? parent.verticalCenter : undefined
+        anchors.left: root.isVertical && SettingsData.dockPosition === SettingsData.Position.Left ? parent.left : undefined
+        anchors.right: root.isVertical && SettingsData.dockPosition === SettingsData.Position.Right ? parent.right : undefined
+        anchors.top: root.isVertical ? undefined : parent.top
 
         Flow {
             id: layoutFlow
             flow: root.isVertical ? Flow.TopToBottom : Flow.LeftToRight
-            spacing: 8
+            spacing: Math.min(8, Math.max(4, root.iconSize * 0.08))
 
         Repeater {
             id: repeater
@@ -60,65 +73,99 @@ Item {
                     const sortedToplevels = CompositorService.sortedToplevels
 
                     if (root.groupByApp) {
-                        // Group windows by appId
+                        // Group windows by appId (case-insensitive, using moddedAppId)
                         const appGroups = new Map()
 
                         // Add pinned apps first (even if they have no windows)
                         pinnedApps.forEach(appId => {
-                            appGroups.set(appId, {
-                                appId: appId,
+                            const normalizedId = root.normalizeAppId(appId)
+                            appGroups.set(normalizedId, {
+                                appId: appId, // Keep original case for display
                                 isPinned: true,
                                 windows: []
                             })
                         })
 
-                        // Group all running windows by appId
+                        // Group all running windows by appId (case-insensitive, using moddedAppId)
                         sortedToplevels.forEach((toplevel, index) => {
                             const appId = toplevel.appId || "unknown"
-                            if (!appGroups.has(appId)) {
-                                appGroups.set(appId, {
+                            const normalizedId = root.normalizeAppId(appId)
+                            
+                            // Check if this window matches any pinned app
+                            let matchedGroup = null
+                            for (let [key, group] of appGroups.entries()) {
+                                if (key === normalizedId) {
+                                    matchedGroup = group
+                                    break
+                                }
+                            }
+
+                            if (!matchedGroup) {
+                                // Create new group for unpinned app
+                                appGroups.set(normalizedId, {
                                     appId: appId,
                                     isPinned: false,
                                     windows: []
                                 })
+                                matchedGroup = appGroups.get(normalizedId)
                             }
+
                             const title = toplevel.title || "(Unnamed)"
                             const truncatedTitle = title.length > 50 ? title.substring(0, 47) + "..." : title
                             const uniqueId = toplevel.title + "|" + (toplevel.appId || "") + "|" + index
 
-                            appGroups.get(appId).windows.push({
+                            matchedGroup.windows.push({
                                 windowId: index,
                                 windowTitle: truncatedTitle,
                                 uniqueId: uniqueId
                             })
                         })
 
-                        // Sort groups: pinned first, then unpinned
+                        // Sort groups: pinned first (in pinned order), then unpinned
                         const pinnedGroups = []
                         const unpinnedGroups = []
 
-                        Array.from(appGroups.entries()).forEach(([appId, group]) => {
-                            // For grouped apps, just show the first window info but track all windows
+                        // Add pinned groups in the order they appear in pinnedApps
+                        pinnedApps.forEach(pinnedAppId => {
+                            const normalizedId = root.normalizeAppId(pinnedAppId)
+                            if (appGroups.has(normalizedId)) {
+                                const group = appGroups.get(normalizedId)
+                                const firstWindow = group.windows.length > 0 ? group.windows[0] : null
+
+                                const item = {
+                                    "type": "grouped",
+                                    "appId": group.appId, // Use original case
+                                    "windowId": firstWindow ? firstWindow.windowId : -1,
+                                    "windowTitle": firstWindow ? firstWindow.windowTitle : "",
+                                    "workspaceId": -1,
+                                    "isPinned": true,
+                                    "isRunning": group.windows.length > 0,
+                                    "windowCount": group.windows.length,
+                                    "uniqueId": firstWindow ? firstWindow.uniqueId : "",
+                                    "allWindows": group.windows
+                                }
+                                pinnedGroups.push(item)
+                                appGroups.delete(normalizedId) // Remove from map so we don't add it again
+                            }
+                        })
+
+                        // Add remaining unpinned groups
+                        Array.from(appGroups.entries()).forEach(([normalizedId, group]) => {
                             const firstWindow = group.windows.length > 0 ? group.windows[0] : null
 
                             const item = {
                                 "type": "grouped",
-                                "appId": appId,
+                                "appId": group.appId,
                                 "windowId": firstWindow ? firstWindow.windowId : -1,
                                 "windowTitle": firstWindow ? firstWindow.windowTitle : "",
                                 "workspaceId": -1,
-                                "isPinned": group.isPinned,
+                                "isPinned": false,
                                 "isRunning": group.windows.length > 0,
                                 "windowCount": group.windows.length,
                                 "uniqueId": firstWindow ? firstWindow.uniqueId : "",
                                 "allWindows": group.windows
                             }
-
-                            if (group.isPinned) {
-                                pinnedGroups.push(item)
-                            } else {
-                                unpinnedGroups.push(item)
-                            }
+                            unpinnedGroups.push(item)
                         })
 
                         // Add items in order
@@ -192,14 +239,15 @@ Item {
             delegate: Item {
                 id: delegateItem
                 property alias dockButton: button
+                clip: false
 
-                width: model.type === "separator" ? 16 : 40
-                height: 40
+                width: model.type === "separator" ? (root.isVertical ? root.iconSize : 8) : (root.isVertical ? root.iconSize : root.iconSize * 1.2)
+                height: model.type === "separator" ? (root.isVertical ? 8 : root.iconSize) : (root.isVertical ? root.iconSize * 1.2 : root.iconSize)
 
                 Rectangle {
                     visible: model.type === "separator"
-                    width: 2
-                    height: 20
+                    width: root.isVertical ? root.iconSize * 0.5 : 2
+                    height: root.isVertical ? 2 : root.iconSize * 0.5
                     color: Qt.rgba(Theme.outline.r, Theme.outline.g, Theme.outline.b, 0.3)
                     radius: 1
                     anchors.centerIn: parent
@@ -210,15 +258,16 @@ Item {
                     visible: model.type !== "separator"
                     anchors.centerIn: parent
 
-                    width: 40
-                    height: 40
+                    width: delegateItem.width
+                    height: delegateItem.height
+                    actualIconSize: root.iconSize
 
                     appData: model
                     contextMenu: root.contextMenu
                     dockApps: root
                     index: model.index
+                    parentDockScreen: root.dockScreen
 
-                    // Override tooltip for windows to show window title
                     showWindowTitle: model.type === "window" || model.type === "grouped"
                     windowTitle: model.windowTitle || ""
                 }

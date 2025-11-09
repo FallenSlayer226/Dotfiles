@@ -5,15 +5,22 @@ import qs.Services
 Text {
     property bool isMonospace: false
 
+    FontLoader {
+        id: interFont
+        source: Qt.resolvedUrl("../assets/fonts/inter/InterVariable.ttf")
+    }
+
+    FontLoader {
+        id: firaCodeFont
+        source: Qt.resolvedUrl("../assets/fonts/nerd-fonts/FiraCodeNerdFont-Regular.ttf")
+    }
+
     readonly property string resolvedFontFamily: {
         const requestedFont = isMonospace ? SettingsData.monoFontFamily : SettingsData.fontFamily
         const defaultFont = isMonospace ? SettingsData.defaultMonoFontFamily : SettingsData.defaultFontFamily
 
         if (requestedFont === defaultFont) {
-            const availableFonts = Qt.fontFamilies()
-            if (!availableFonts.includes(requestedFont)) {
-                return isMonospace ? "Monospace" : "DejaVu Sans"
-            }
+            return isMonospace ? firaCodeFont.name : interFont.name
         }
         return requestedFont
     }

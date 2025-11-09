@@ -29,11 +29,6 @@ Rectangle {
         cache: true
         visible: false
         source: root.imageSource
-
-        Component.onCompleted: {
-            sourceSize.width = 128
-            sourceSize.height = 128
-        }
     }
 
     MultiEffect {
@@ -49,9 +44,9 @@ Rectangle {
 
     Item {
         id: circularMask
+        anchors.centerIn: parent
         width: parent.width - 4
         height: parent.height - 4
-        anchors.centerIn: parent
         layer.enabled: true
         layer.smooth: true
         visible: false

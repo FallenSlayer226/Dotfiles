@@ -38,6 +38,10 @@ Singleton {
         return stringify(path).replace("file://", "")
     }
 
+    function toFileUrl(path: string): string {
+        return path.startsWith("file://") ? path : "file://" + path
+    }
+
     function mkdir(path: url): void {
         Quickshell.execDetached(["mkdir", "-p", strip(path)])
     }
@@ -48,13 +52,17 @@ Singleton {
 
     // ! Spotify and maybe some other apps report the wrong app id in toplevels, hardcode special case
     function moddedAppId(appId: string): string {
-        if (appId === "Spotify")
-            return "spotify-launcher"
-        if (appId === "beepertexts")
+        // Normalize to lowercase for case-insensitive comparison
+        const normalizedId = appId.toLowerCase()
+        
+        // Spotify can report as "Spotify" or "spotify", normalize to just "spotify"
+        if (normalizedId === "spotify")
+            return "spotify"
+        if (normalizedId === "beepertexts")
             return "beeper"
-        if (appId === "home assistant desktop")
+        if (normalizedId === "home assistant desktop")
             return "homeassistant-desktop"
-        if (appId.includes("com.transmissionbt.transmission"))
+        if (normalizedId.includes("com.transmissionbt.transmission"))
             return "transmission-gtk"
         return appId
     }

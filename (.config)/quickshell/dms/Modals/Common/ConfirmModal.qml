@@ -58,7 +58,7 @@ DankModal {
     shouldBeVisible: false
     allowStacking: true
     width: 350
-    height: 160
+    height: contentLoader.item ? contentLoader.item.implicitHeight + Theme.spacingM * 2 : 160
     enableShadow: true
     shouldHaveFocus: true
     onBackgroundClicked: {
@@ -68,9 +68,11 @@ DankModal {
         }
     }
     onOpened: {
-        modalFocusScope.forceActiveFocus()
-        modalFocusScope.focus = true
-        shouldHaveFocus = true
+        Qt.callLater(function () {
+            modalFocusScope.forceActiveFocus()
+            modalFocusScope.focus = true
+            shouldHaveFocus = true
+        })
     }
     modalFocusScope.Keys.onPressed: function (event) {
         switch (event.key) {
@@ -156,11 +158,17 @@ DankModal {
     content: Component {
         Item {
             anchors.fill: parent
+            implicitHeight: mainColumn.implicitHeight
 
             Column {
-                anchors.centerIn: parent
-                width: parent.width - Theme.spacingM * 2
-                spacing: Theme.spacingM
+                id: mainColumn
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.top: parent.top
+                anchors.leftMargin: Theme.spacingL
+                anchors.rightMargin: Theme.spacingL
+                anchors.topMargin: Theme.spacingL
+                spacing: 0
 
                 StyledText {
                     text: confirmTitle
@@ -169,6 +177,11 @@ DankModal {
                     font.weight: Font.Medium
                     width: parent.width
                     horizontalAlignment: Text.AlignHCenter
+                }
+
+                Item {
+                    width: 1
+                    height: Theme.spacingL
                 }
 
                 StyledText {
@@ -181,7 +194,8 @@ DankModal {
                 }
 
                 Item {
-                    height: Theme.spacingS
+                    width: 1
+                    height: Theme.spacingL * 1.5
                 }
 
                 Row {
@@ -262,6 +276,11 @@ DankModal {
                             }
                         }
                     }
+                }
+
+                Item {
+                    width: 1
+                    height: Theme.spacingL
                 }
             }
         }

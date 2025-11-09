@@ -40,7 +40,7 @@ Column {
         width: parent.width
         height: 200
         radius: Theme.cornerRadius
-        color: Theme.surfaceContainerHigh
+        color: Theme.withAlpha(Theme.surfaceContainerHigh, Theme.popupTransparency)
         border.color: Qt.rgba(Theme.outline.r, Theme.outline.g, Theme.outline.b, 0.06)
         border.width: 1
 
@@ -180,7 +180,7 @@ Column {
         width: parent.width
         height: 80
         radius: Theme.cornerRadius
-        color: Theme.surfaceContainerHigh
+        color: Theme.withAlpha(Theme.surfaceContainerHigh, Theme.popupTransparency)
         border.color: Qt.rgba(Theme.outline.r, Theme.outline.g, Theme.outline.b, 0.06)
         border.width: 1
 
@@ -194,7 +194,7 @@ Column {
                 spacing: 4
 
                 StyledText {
-                    text: "Memory"
+                    text: I18n.tr("Memory")
                     font.pixelSize: Theme.fontSizeLarge
                     font.weight: Font.Bold
                     color: Theme.surfaceText
@@ -269,7 +269,7 @@ Column {
                 spacing: 4
 
                 StyledText {
-                    text: "Swap"
+                    text: I18n.tr("Swap")
                     font.pixelSize: Theme.fontSizeLarge
                     font.weight: Font.Bold
                     color: Theme.surfaceText
@@ -350,7 +350,7 @@ Column {
             width: (parent.width - Theme.spacingM) / 2
             height: 80
             radius: Theme.cornerRadius
-            color: Theme.surfaceContainerHigh
+            color: Theme.withAlpha(Theme.surfaceContainerHigh, Theme.popupTransparency)
             border.color: Qt.rgba(Theme.outline.r, Theme.outline.g, Theme.outline.b, 0.06)
             border.width: 1
 
@@ -359,7 +359,7 @@ Column {
                 spacing: Theme.spacingXS
 
                 StyledText {
-                    text: "Network"
+                    text: I18n.tr("Network")
                     font.pixelSize: Theme.fontSizeMedium
                     font.weight: Font.Bold
                     color: Theme.surfaceText
@@ -416,7 +416,7 @@ Column {
             width: (parent.width - Theme.spacingM) / 2
             height: 80
             radius: Theme.cornerRadius
-            color: Theme.surfaceContainerHigh
+            color: Theme.withAlpha(Theme.surfaceContainerHigh, Theme.popupTransparency)
             border.color: Qt.rgba(Theme.outline.r, Theme.outline.g, Theme.outline.b, 0.06)
             border.width: 1
 
@@ -425,7 +425,7 @@ Column {
                 spacing: Theme.spacingXS
 
                 StyledText {
-                    text: "Disk"
+                    text: I18n.tr("Disk")
                     font.pixelSize: Theme.fontSizeMedium
                     font.weight: Font.Bold
                     color: Theme.surfaceText

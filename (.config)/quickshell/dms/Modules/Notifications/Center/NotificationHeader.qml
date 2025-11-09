@@ -19,7 +19,7 @@ Item {
         spacing: Theme.spacingXS
 
         StyledText {
-            text: "Notifications"
+            text: I18n.tr("Notifications")
             font.pixelSize: Theme.fontSizeLarge
             color: Theme.surfaceText
             font.weight: Font.Medium
@@ -34,39 +34,18 @@ Item {
             buttonSize: 28
             anchors.verticalCenter: parent.verticalCenter
             onClicked: SessionData.setDoNotDisturb(!SessionData.doNotDisturb)
-
-            Rectangle {
-                id: doNotDisturbTooltip
-
-                width: tooltipText.contentWidth + Theme.spacingS * 2
-                height: tooltipText.contentHeight + Theme.spacingXS * 2
-                radius: Theme.cornerRadius
-                color: Theme.surfaceContainer
-                border.color: Theme.outline
-                border.width: 1
-                anchors.bottom: parent.top
-                anchors.bottomMargin: Theme.spacingS
-                anchors.horizontalCenter: parent.horizontalCenter
-                visible: doNotDisturbButton.children[1].containsMouse
-                opacity: visible ? 1 : 0
-
-                StyledText {
-                    id: tooltipText
-
-                    text: "Do Not Disturb"
-                    font.pixelSize: Theme.fontSizeSmall
-                    color: Theme.surfaceText
-                    font.weight: Font.Medium
-                    anchors.centerIn: parent
-                    font.hintingPreference: Font.PreferFullHinting
+            onEntered: {
+                tooltipLoader.active = true
+                if (tooltipLoader.item) {
+                    const p = mapToItem(null, width / 2, 0)
+                    tooltipLoader.item.show(I18n.tr("Do Not Disturb"), p.x, p.y - 40, null)
                 }
-
-                Behavior on opacity {
-                    NumberAnimation {
-                        duration: Theme.shortDuration
-                        easing.type: Theme.standardEasing
-                    }
+            }
+            onExited: {
+                if (tooltipLoader.item) {
+                    tooltipLoader.item.hide()
                 }
+                tooltipLoader.active = false
             }
         }
     }
@@ -106,7 +85,7 @@ Item {
             height: 28
             radius: Theme.cornerRadius
             visible: NotificationService.notifications.length > 0
-            color: clearArea.containsMouse ? Theme.primaryHoverLight : Theme.surfaceContainerHigh
+            color: clearArea.containsMouse ? Theme.primaryHoverLight : Theme.withAlpha(Theme.surfaceContainerHigh, Theme.popupTransparency)
 
             Row {
                 anchors.centerIn: parent
@@ -120,7 +99,7 @@ Item {
                 }
 
                 StyledText {
-                    text: "Clear All"
+                    text: I18n.tr("Clear")
                     font.pixelSize: Theme.fontSizeSmall
                     color: clearArea.containsMouse ? Theme.primary : Theme.surfaceText
                     font.weight: Font.Medium
@@ -138,5 +117,12 @@ Item {
             }
 
         }
+    }
+
+    Loader {
+        id: tooltipLoader
+
+        active: false
+        sourceComponent: DankTooltip {}
     }
 }

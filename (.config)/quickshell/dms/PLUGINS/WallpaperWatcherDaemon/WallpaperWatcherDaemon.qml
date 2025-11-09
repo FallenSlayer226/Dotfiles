@@ -57,10 +57,10 @@ PluginComponent {
     }
 
     Component.onCompleted: {
-        console.log("WallpaperWatcherDaemon: Started monitoring wallpaper changes")
+        console.info("WallpaperWatcherDaemon: Started monitoring wallpaper changes")
     }
 
     Component.onDestruction: {
-        console.log("WallpaperWatcherDaemon: Stopped monitoring wallpaper changes")
+        console.info("WallpaperWatcherDaemon: Stopped monitoring wallpaper changes")
     }
 }

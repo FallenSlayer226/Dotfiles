@@ -75,7 +75,7 @@ Singleton {
                                     "96": "thunderstorm",
                                     "99": "thunderstorm"
                                 })
-    
+
     property var nightWeatherIcons: ({
                                         "0": "clear_night",
                                         "1": "clear_night",
@@ -114,7 +114,7 @@ Singleton {
         const iconMap = isDay ? weatherIcons : nightWeatherIcons
         return iconMap[String(code)] || "cloud"
     }
-    
+
     function getWeatherCondition(code) {
         const conditions = {
             "0": "Clear",
@@ -148,10 +148,10 @@ Singleton {
         }
         return conditions[String(code)] || "Unknown"
     }
-    
+
     function formatTime(isoString) {
         if (!isoString) return "--"
-        
+
         try {
             const date = new Date(isoString)
             const format = SettingsData.use24HourClock ? "HH:mm" : "h:mm AP"
@@ -160,15 +160,15 @@ Singleton {
             return "--"
         }
     }
-    
+
     function formatForecastDay(isoString, index) {
         if (!isoString) return "--"
-        
+
         try {
             const date = new Date(isoString)
-            if (index === 0) return qsTr("Today")
-            if (index === 1) return qsTr("Tomorrow")
-            
+            if (index === 0) return I18n.tr("Today")
+            if (index === 1) return I18n.tr("Tomorrow")
+
             const locale = Qt.locale()
             return locale.dayName(date.getDay(), Locale.ShortFormat)
         } catch (e) {
@@ -180,7 +180,7 @@ Singleton {
         if (!location) {
             return null
         }
-        
+
         const params = [
             "latitude=" + location.latitude,
             "longitude=" + location.longitude,
@@ -189,14 +189,14 @@ Singleton {
             "timezone=auto",
             "forecast_days=7"
         ]
-        
+
         if (SettingsData.useFahrenheit) {
             params.push("temperature_unit=fahrenheit")
         }
-        
+
         return "https://api.open-meteo.com/v1/forecast?" + params.join('&')
     }
-    
+
     function getGeocodingUrl(query) {
         return "https://geocoding-api.open-meteo.com/v1/search?name=" + encodeURIComponent(query) + "&count=1&language=en&format=json"
     }
@@ -229,25 +229,25 @@ Singleton {
                     }
                 }
             }
-            
+
             const cityName = SettingsData.weatherLocation
             if (cityName) {
                 getLocationFromCity(cityName)
             }
         }
     }
-    
+
     function getLocationFromCoords(lat, lon) {
         const url = "https://nominatim.openstreetmap.org/reverse?lat=" + lat + "&lon=" + lon + "&format=json&addressdetails=1&accept-language=en"
         reverseGeocodeFetcher.command = lowPriorityCmd.concat(curlBaseCmd).concat(["-H", "User-Agent: DankMaterialShell Weather Widget", url])
         reverseGeocodeFetcher.running = true
     }
-    
+
     function getLocationFromCity(city) {
         cityGeocodeFetcher.command = lowPriorityCmd.concat(curlBaseCmd).concat([getGeocodingUrl(city)])
         cityGeocodeFetcher.running = true
     }
-    
+
     function getLocationFromIP() {
         ipLocationFetcher.running = true
     }
@@ -287,7 +287,7 @@ Singleton {
         root.lastFetchTime = 0 // Reset throttle
         fetchWeather()
     }
-    
+
     function nextInterval() {
         const jitter = Math.floor(Math.random() * 15000) - 7500
         return Math.max(60000, root.updateInterval + jitter)
@@ -322,9 +322,9 @@ Singleton {
 
     Process {
         id: ipLocationFetcher
-        command: lowPriorityCmd.concat(curlBaseCmd).concat(["http://ipinfo.io/json"])
+        command: lowPriorityCmd.concat(curlBaseCmd).concat(["http://ip-api.com/json/"])
         running: false
-        
+
         stdout: StdioCollector {
             onStreamFinished: {
                 const raw = text.trim()
@@ -335,25 +335,19 @@ Singleton {
 
                 try {
                     const data = JSON.parse(raw)
-                    const coords = data.loc
+
+                    if (data.status === "fail") {
+                        throw new Error("IP location lookup failed")
+                    }
+
+                    const lat = parseFloat(data.lat)
+                    const lon = parseFloat(data.lon)
                     const city = data.city
-                    
-                    if (!coords || !city) {
-                        throw new Error("Missing location data")
+
+                    if (!city || isNaN(lat) || isNaN(lon)) {
+                        throw new Error("Missing or invalid location data")
                     }
-                    
-                    const coordsParts = coords.split(",")
-                    if (coordsParts.length !== 2) {
-                        throw new Error("Invalid coordinates format")
-                    }
-                    
-                    const lat = parseFloat(coordsParts[0])
-                    const lon = parseFloat(coordsParts[1])
-                    
-                    if (isNaN(lat) || isNaN(lon)) {
-                        throw new Error("Invalid coordinate values")
-                    }
-                    
+
                     root.location = {
                         city: city,
                         latitude: lat,
@@ -365,18 +359,18 @@ Singleton {
                 }
             }
         }
-        
+
         onExited: exitCode => {
             if (exitCode !== 0) {
                 root.handleWeatherFailure()
             }
         }
     }
-    
+
     Process {
         id: reverseGeocodeFetcher
         running: false
-        
+
         stdout: StdioCollector {
             onStreamFinished: {
                 const raw = text.trim()
@@ -388,32 +382,32 @@ Singleton {
                 try {
                     const data = JSON.parse(raw)
                     const address = data.address || {}
-                    
+
                     root.location = {
                         city: address.hamlet || address.city || address.town || address.village || "Unknown",
                         country: address.country || "Unknown",
                         latitude: parseFloat(data.lat),
                         longitude: parseFloat(data.lon)
                     }
-                    
+
                     fetchWeather()
                 } catch (e) {
                     root.handleWeatherFailure()
                 }
             }
         }
-        
+
         onExited: exitCode => {
             if (exitCode !== 0) {
                 root.handleWeatherFailure()
             }
         }
     }
-    
+
     Process {
         id: cityGeocodeFetcher
         running: false
-        
+
         stdout: StdioCollector {
             onStreamFinished: {
                 const raw = text.trim()
@@ -425,27 +419,27 @@ Singleton {
                 try {
                     const data = JSON.parse(raw)
                     const results = data.results
-                    
+
                     if (!results || results.length === 0) {
                         throw new Error("No results found")
                     }
-                    
+
                     const result = results[0]
-                    
+
                     root.location = {
                         city: result.name,
                         country: result.country,
                         latitude: result.latitude,
                         longitude: result.longitude
                     }
-                    
+
                     fetchWeather()
                 } catch (e) {
                     root.handleWeatherFailure()
                 }
             }
         }
-        
+
         onExited: exitCode => {
             if (exitCode !== 0) {
                 root.handleWeatherFailure()
@@ -467,7 +461,7 @@ Singleton {
 
                 try {
                     const data = JSON.parse(raw)
-                    
+
                     if (!data.current || !data.daily) {
                         throw new Error("Required weather data fields missing")
                     }
@@ -475,12 +469,12 @@ Singleton {
                     const current = data.current
                     const daily = data.daily
                     const currentUnits = data.current_units || {}
-                    
+
                     const tempC = current.temperature_2m || 0
                     const tempF = SettingsData.useFahrenheit ? tempC : (tempC * 9/5 + 32)
                     const feelsLikeC = current.apparent_temperature || tempC
                     const feelsLikeF = SettingsData.useFahrenheit ? feelsLikeC : (feelsLikeC * 9/5 + 32)
-                    
+
                     const forecast = []
                     if (daily.time && daily.time.length > 0) {
                         for (let i = 0; i < Math.min(daily.time.length, 7); i++) {
@@ -488,7 +482,7 @@ Singleton {
                             const tempMaxC = daily.temperature_2m_max?.[i] || 0
                             const tempMinF = SettingsData.useFahrenheit ? tempMinC : (tempMinC * 9/5 + 32)
                             const tempMaxF = SettingsData.useFahrenheit ? tempMaxC : (tempMaxC * 9/5 + 32)
-                            
+
                             forecast.push({
                                 "day": formatForecastDay(daily.time[i], i),
                                 "wCode": daily.weather_code?.[i] || 0,
@@ -502,7 +496,7 @@ Singleton {
                             })
                         }
                     }
-                    
+
                     root.weather = {
                         "available": true,
                         "loading": false,
@@ -519,7 +513,7 @@ Singleton {
                         "sunset": formatTime(daily.sunset?.[0]) || "18:00",
                         "uv": 0,
                         "pressure": Math.round(current.surface_pressure || 0),
-                        "precipitationProbability": Math.round(current.precipitation || 0),
+                        "precipitationProbability": Math.round(daily.precipitation_probability_max?.[0] || 0),
                         "isDay": Boolean(current.is_day),
                         "forecast": forecast
                     }
@@ -577,7 +571,7 @@ Singleton {
     }
 
     Component.onCompleted: {
-        
+
         SettingsData.weatherCoordinatesChanged.connect(() => {
                                                            root.location = null
                                                            root.weather = {
@@ -635,7 +629,7 @@ Singleton {
                                                         root.lastFetchTime = 0
                                                         root.forceRefresh()
                                                     })
-                                                    
+
         SettingsData.useFahrenheitChanged.connect(() => {
                                                        root.lastFetchTime = 0
                                                        root.forceRefresh()

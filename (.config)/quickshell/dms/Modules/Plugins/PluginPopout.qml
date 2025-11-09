@@ -1,14 +1,17 @@
 import QtQuick
+import Quickshell.Wayland
 import qs.Common
 import qs.Widgets
 
 DankPopout {
     id: root
 
+    WlrLayershell.keyboardFocus: shouldBeVisible ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None 
+
     property var triggerScreen: null
     property Component pluginContent: null
     property real contentWidth: 400
-    property real contentHeight: 400
+    property real contentHeight: 0
 
     function setTriggerPosition(x, y, width, section, screen) {
         triggerX = x
@@ -29,7 +32,7 @@ DankPopout {
             id: popoutContainer
 
             implicitHeight: popoutColumn.implicitHeight + Theme.spacingL * 2
-            color: Theme.popupBackground()
+            color: Theme.withAlpha(Theme.surfaceContainer, Theme.popupTransparency)
             radius: Theme.cornerRadius
             border.width: 0
             antialiasing: true
@@ -63,13 +66,12 @@ DankPopout {
             Column {
                 id: popoutColumn
                 width: parent.width - Theme.spacingS * 2
-                height: parent.height - Theme.spacingS * 2
                 x: Theme.spacingS
                 y: Theme.spacingS
                 spacing: Theme.spacingS
 
                 Loader {
-                    id: popoutContent
+                    id: popoutContentLoader
                     width: parent.width
                     sourceComponent: root.pluginContent
 
@@ -78,6 +80,9 @@ DankPopout {
                             item.closePopout = function() {
                                 root.close()
                             }
+                        }
+                        if (root.contentHeight === 0 && item) {
+                            root.contentHeight = item.implicitHeight + Theme.spacingS * 2
                         }
                     }
                 }

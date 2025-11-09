@@ -59,6 +59,11 @@ in {
                             allow-when-locked = true;
                             action = dms-ipc "audio" "micmute";
                         };
+                        "Mod+Alt+N" = {
+                            allow-when-locked = true;
+                            action = dms-ipc "night" "toggle";
+                            hotkey-overlay.title = "Toggle Night Mode";
+                        };
                     }
                     // lib.attrsets.optionalAttrs cfg.enableSystemMonitoring {
                         "Mod+M" = {
@@ -81,20 +86,19 @@ in {
                             allow-when-locked = true;
                             action = dms-ipc "brightness" "decrement" "5" "";
                         };
-                    }
-                    // lib.attrsets.optionalAttrs cfg.enableNightMode {
-                        "Mod+Alt+N" = {
-                            allow-when-locked = true;
-                            action = dms-ipc "night" "toggle";
-                            hotkey-overlay.title = "Toggle Night Mode";
-                        };
                     };
             })
 
             (lib.mkIf cfg.niri.enableSpawn {
-                spawn-at-startup = [
-                    {command = ["dms" "run"];}
-                ];
+                spawn-at-startup =
+                    [
+                        {command = ["dms" "run"];}
+                    ]
+                    ++ lib.optionals cfg.enableClipboard [
+                        {
+                            command = ["wl-paste" "--watch" "cliphist" "store"];
+                        }
+                    ];
             })
         ];
     };

@@ -1,35 +1,22 @@
 import QtQuick
 import QtQuick.Controls
 import qs.Common
+import qs.Modules.Plugins
 import qs.Services
 import qs.Widgets
 
-Rectangle {
+BasePill {
     id: root
 
-    property bool isVertical: axis?.isVertical ?? false
-    property var axis: null
     property bool showPercentage: true
     property bool showIcon: true
     property var toggleProcessList
-    property string section: "right"
-    property var popupTarget: null
-    property var parentScreen: null
-    property real barThickness: 48
-    property real widgetThickness: 30
-    readonly property real horizontalPadding: SettingsData.dankBarNoBackground ? 0 : Math.max(Theme.spacingXS, Theme.spacingS * (widgetThickness / 30))
+    property var popoutTarget: null
+    property var widgetData: null
+    property bool minimumWidth: (widgetData && widgetData.minimumWidth !== undefined) ? widgetData.minimumWidth : true
+    property bool showSwap: (widgetData && widgetData.showSwap !== undefined) ? widgetData.showSwap : false
+    readonly property real swapUsage: DgopService.totalSwapKB > 0 ? (DgopService.usedSwapKB / DgopService.totalSwapKB) * 100 : 0
 
-    width: isVertical ? widgetThickness : (ramContent.implicitWidth + horizontalPadding * 2)
-    height: isVertical ? (ramColumn.implicitHeight + horizontalPadding * 2) : widgetThickness
-    radius: SettingsData.dankBarNoBackground ? 0 : Theme.cornerRadius
-    color: {
-        if (SettingsData.dankBarNoBackground) {
-            return "transparent";
-        }
-
-        const baseColor = ramArea.containsMouse ? Theme.widgetBaseHoverColor : Theme.widgetBaseBackgroundColor;
-        return Qt.rgba(baseColor.r, baseColor.g, baseColor.b, baseColor.a * Theme.widgetTransparency);
-    }
     Component.onCompleted: {
         DgopService.addRef(["memory"]);
     }
@@ -37,120 +24,140 @@ Rectangle {
         DgopService.removeRef(["memory"]);
     }
 
-    MouseArea {
-        id: ramArea
+    content: Component {
+        Item {
+            implicitWidth: root.isVerticalOrientation ? (root.widgetThickness - root.horizontalPadding * 2) : ramContent.implicitWidth
+            implicitHeight: root.isVerticalOrientation ? ramColumn.implicitHeight : (root.widgetThickness - root.horizontalPadding * 2)
 
+            Column {
+                id: ramColumn
+                visible: root.isVerticalOrientation
+                anchors.centerIn: parent
+                spacing: 1
+
+                DankIcon {
+                    name: "developer_board"
+                    size: Theme.barIconSize(root.barThickness)
+                    color: {
+                        if (DgopService.memoryUsage > 90) {
+                            return Theme.tempDanger;
+                        }
+
+                        if (DgopService.memoryUsage > 75) {
+                            return Theme.tempWarning;
+                        }
+
+                        return Theme.surfaceText;
+                    }
+                    anchors.horizontalCenter: parent.horizontalCenter
+                }
+
+                StyledText {
+                    text: {
+                        if (DgopService.memoryUsage === undefined || DgopService.memoryUsage === null || DgopService.memoryUsage === 0) {
+                            return "--";
+                        }
+
+                        return DgopService.memoryUsage.toFixed(0);
+                    }
+                    font.pixelSize: Theme.barTextSize(root.barThickness)
+                    color: Theme.surfaceText
+                    anchors.horizontalCenter: parent.horizontalCenter
+                }
+
+                StyledText {
+                    visible: root.showSwap && DgopService.totalSwapKB > 0
+                    text: root.swapUsage.toFixed(0)
+                    font.pixelSize: Theme.barTextSize(root.barThickness)
+                    color: Theme.surfaceVariantText
+                    anchors.horizontalCenter: parent.horizontalCenter
+                }
+            }
+
+            Row {
+                id: ramContent
+                visible: !root.isVerticalOrientation
+                anchors.centerIn: parent
+                spacing: 3
+
+                DankIcon {
+                    name: "developer_board"
+                    size: Theme.barIconSize(root.barThickness)
+                    color: {
+                        if (DgopService.memoryUsage > 90) {
+                            return Theme.tempDanger;
+                        }
+
+                        if (DgopService.memoryUsage > 75) {
+                            return Theme.tempWarning;
+                        }
+
+                        return Theme.surfaceText;
+                    }
+                    anchors.verticalCenter: parent.verticalCenter
+                }
+
+                StyledText {
+                    text: {
+                        if (DgopService.memoryUsage === undefined || DgopService.memoryUsage === null || DgopService.memoryUsage === 0) {
+                            return "--%";
+                        }
+
+                        let ramText = DgopService.memoryUsage.toFixed(0) + "%";
+                        if (root.showSwap && DgopService.totalSwapKB > 0) {
+                            return ramText + " · " + root.swapUsage.toFixed(0) + "%";
+                        }
+                        return ramText;
+                    }
+                    font.pixelSize: Theme.barTextSize(root.barThickness)
+                    color: Theme.surfaceText
+                    anchors.verticalCenter: parent.verticalCenter
+                    horizontalAlignment: Text.AlignLeft
+                    elide: Text.ElideNone
+                    wrapMode: Text.NoWrap
+
+                    StyledTextMetrics {
+                        id: ramBaseline
+                        font.pixelSize: Theme.barTextSize(root.barThickness)
+                        text: {
+                            if (!root.showSwap) {
+                                return "100%";
+                            }
+                            if (root.swapUsage < 10) {
+                                return "100% · 0%";
+                            }
+                            return "100% · 100%";
+                        }
+                    }
+
+                    width: root.minimumWidth ? Math.max(ramBaseline.width, paintedWidth) : paintedWidth
+
+                    Behavior on width {
+                        NumberAnimation {
+                            duration: 120
+                            easing.type: Easing.OutCubic
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    MouseArea {
         anchors.fill: parent
-        hoverEnabled: true
         cursorShape: Qt.PointingHandCursor
+        acceptedButtons: Qt.LeftButton
         onPressed: {
-            if (popupTarget && popupTarget.setTriggerPosition) {
-                const globalPos = mapToGlobal(0, 0)
+            if (popoutTarget && popoutTarget.setTriggerPosition) {
+                const globalPos = root.visualContent.mapToGlobal(0, 0)
                 const currentScreen = parentScreen || Screen
-                const pos = SettingsData.getPopupTriggerPosition(globalPos, currentScreen, barThickness, width)
-                popupTarget.setTriggerPosition(pos.x, pos.y, pos.width, section, currentScreen)
+                const pos = SettingsData.getPopupTriggerPosition(globalPos, currentScreen, barThickness, root.visualWidth)
+                popoutTarget.setTriggerPosition(pos.x, pos.y, pos.width, section, currentScreen)
             }
             DgopService.setSortBy("memory");
             if (root.toggleProcessList) {
                 root.toggleProcessList();
             }
-
         }
     }
-
-    Column {
-        id: ramColumn
-        visible: root.isVertical
-        anchors.centerIn: parent
-        spacing: 1
-
-        DankIcon {
-            name: "developer_board"
-            size: Theme.iconSize - 8
-            color: {
-                if (DgopService.memoryUsage > 90) {
-                    return Theme.tempDanger;
-                }
-
-                if (DgopService.memoryUsage > 75) {
-                    return Theme.tempWarning;
-                }
-
-                return Theme.surfaceText;
-            }
-            anchors.horizontalCenter: parent.horizontalCenter
-        }
-
-        StyledText {
-            text: {
-                if (DgopService.memoryUsage === undefined || DgopService.memoryUsage === null || DgopService.memoryUsage === 0) {
-                    return "--";
-                }
-
-                return DgopService.memoryUsage.toFixed(0);
-            }
-            font.pixelSize: Theme.fontSizeSmall
-            font.weight: Font.Medium
-            color: Theme.surfaceText
-            anchors.horizontalCenter: parent.horizontalCenter
-        }
-    }
-
-    Row {
-        id: ramContent
-        visible: !root.isVertical
-        anchors.centerIn: parent
-        spacing: 3
-
-        DankIcon {
-            name: "developer_board"
-            size: Theme.iconSize - 8
-            color: {
-                if (DgopService.memoryUsage > 90) {
-                    return Theme.tempDanger;
-                }
-
-                if (DgopService.memoryUsage > 75) {
-                    return Theme.tempWarning;
-                }
-
-                return Theme.surfaceText;
-            }
-            anchors.verticalCenter: parent.verticalCenter
-        }
-
-        StyledText {
-            text: {
-                if (DgopService.memoryUsage === undefined || DgopService.memoryUsage === null || DgopService.memoryUsage === 0) {
-                    return "--%";
-                }
-
-                return DgopService.memoryUsage.toFixed(0) + "%";
-            }
-            font.pixelSize: Theme.fontSizeSmall
-            font.weight: Font.Medium
-            color: Theme.surfaceText
-            anchors.verticalCenter: parent.verticalCenter
-            horizontalAlignment: Text.AlignLeft
-            elide: Text.ElideNone
-
-            StyledTextMetrics {
-                id: ramBaseline
-                font.pixelSize: Theme.fontSizeSmall
-                font.weight: Font.Medium
-                text: "100%"
-            }
-
-            width: Math.max(ramBaseline.width, paintedWidth)
-
-            Behavior on width {
-                NumberAnimation {
-                    duration: 120
-                    easing.type: Easing.OutCubic
-                }
-            }
-        }
-
-    }
-
 }

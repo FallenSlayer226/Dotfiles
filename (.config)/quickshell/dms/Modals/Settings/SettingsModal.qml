@@ -11,8 +11,11 @@ import qs.Widgets
 DankModal {
     id: settingsModal
 
+    layerNamespace: "dms:settings"
+
     property Component settingsContent
     property alias profileBrowser: profileBrowser
+    property int currentTabIndex: 0
 
     signal closingModal()
 
@@ -33,13 +36,33 @@ DankModal {
     }
 
     objectName: "settingsModal"
-    width: 800
-    height: 800
+    width: Math.min(800, screenWidth * 0.9)
+    height: Math.min(800, screenHeight * 0.85)
+    backgroundColor: Theme.withAlpha(Theme.surfaceContainer, Theme.popupTransparency)
     visible: false
     onBackgroundClicked: () => {
         return hide();
     }
     content: settingsContent
+    onOpened: () => {
+        Qt.callLater(() => modalFocusScope.forceActiveFocus())
+    }
+    modalFocusScope.Keys.onPressed: event => {
+        const tabCount = 11
+        if (event.key === Qt.Key_Down) {
+            currentTabIndex = (currentTabIndex + 1) % tabCount
+            event.accepted = true
+        } else if (event.key === Qt.Key_Up) {
+            currentTabIndex = (currentTabIndex - 1 + tabCount) % tabCount
+            event.accepted = true
+        } else if (event.key === Qt.Key_Tab && !event.modifiers) {
+            currentTabIndex = (currentTabIndex + 1) % tabCount
+            event.accepted = true
+        } else if (event.key === Qt.Key_Backtab || (event.key === Qt.Key_Tab && event.modifiers & Qt.ShiftModifier)) {
+            currentTabIndex = (currentTabIndex - 1 + tabCount) % tabCount
+            event.accepted = true
+        }
+    }
 
     IpcHandler {
         function open(): string {
@@ -78,21 +101,17 @@ DankModal {
         id: profileBrowser
 
         allowStacking: true
+        parentModal: settingsModal
         browserTitle: "Select Profile Image"
         browserIcon: "person"
         browserType: "profile"
+        showHiddenFiles: true
         fileExtensions: ["*.jpg", "*.jpeg", "*.png", "*.bmp", "*.gif", "*.webp"]
         onFileSelected: (path) => {
             PortalService.setProfileImage(path);
             close();
         }
         onDialogClosed: () => {
-            if (settingsModal) {
-                settingsModal.allowFocusOverride = false;
-                settingsModal.shouldHaveFocus = Qt.binding(() => {
-                    return settingsModal.shouldBeVisible;
-                });
-            }
             allowStacking = true;
         }
     }
@@ -101,9 +120,11 @@ DankModal {
         id: wallpaperBrowser
 
         allowStacking: true
+        parentModal: settingsModal
         browserTitle: "Select Wallpaper"
         browserIcon: "wallpaper"
         browserType: "wallpaper"
+        showHiddenFiles: true
         fileExtensions: ["*.jpg", "*.jpeg", "*.png", "*.bmp", "*.gif", "*.webp"]
         onFileSelected: (path) => {
             SessionData.setWallpaper(path);
@@ -116,8 +137,8 @@ DankModal {
 
     settingsContent: Component {
         Item {
+            id: rootScope
             anchors.fill: parent
-            focus: true
 
             Column {
                 anchors.fill: parent
@@ -144,7 +165,7 @@ DankModal {
                         }
 
                         StyledText {
-                            text: "Settings"
+                            text: I18n.tr("Settings")
                             font.pixelSize: Theme.fontSizeXLarge
                             color: Theme.surfaceText
                             font.weight: Font.Medium
@@ -176,7 +197,10 @@ DankModal {
                         id: sidebar
 
                         parentModal: settingsModal
-                        onCurrentIndexChanged: content.currentIndex = currentIndex
+                        currentIndex: settingsModal.currentTabIndex
+                        onCurrentIndexChanged: {
+                            settingsModal.currentTabIndex = currentIndex
+                        }
                     }
 
                     SettingsContent {
@@ -185,7 +209,7 @@ DankModal {
                         width: parent.width - sidebar.width
                         height: parent.height
                         parentModal: settingsModal
-                        currentIndex: sidebar.currentIndex
+                        currentIndex: settingsModal.currentTabIndex
                     }
 
                 }

@@ -12,19 +12,38 @@ import qs.Widgets
 DankModal {
     id: spotlightModal
 
+    layerNamespace: "dms:spotlight"
+
     property bool spotlightOpen: false
-    property Component spotlightContent
+    property alias spotlightContent: spotlightContentInstance
 
     function show() {
         spotlightOpen = true
         open()
-        if (contentLoader.item && contentLoader.item.appLauncher) {
-            contentLoader.item.appLauncher.searchQuery = ""
-        }
 
         Qt.callLater(() => {
-                         if (contentLoader.item && contentLoader.item.searchField) {
-                             contentLoader.item.searchField.forceActiveFocus()
+                         if (spotlightContent && spotlightContent.searchField) {
+                             spotlightContent.searchField.forceActiveFocus()
+                         }
+                     })
+    }
+
+    function showWithQuery(query) {
+        if (spotlightContent) {
+            if (spotlightContent.appLauncher) {
+                spotlightContent.appLauncher.searchQuery = query
+            }
+            if (spotlightContent.searchField) {
+                spotlightContent.searchField.text = query
+            }
+        }
+
+        spotlightOpen = true
+        open()
+
+        Qt.callLater(() => {
+                         if (spotlightContent && spotlightContent.searchField) {
+                             spotlightContent.searchField.forceActiveFocus()
                          }
                      })
     }
@@ -32,7 +51,25 @@ DankModal {
     function hide() {
         spotlightOpen = false
         close()
-        cleanupTimer.restart()
+    }
+
+    onDialogClosed: {
+        if (spotlightContent) {
+            if (spotlightContent.appLauncher) {
+                spotlightContent.appLauncher.searchQuery = ""
+                spotlightContent.appLauncher.selectedIndex = 0
+                spotlightContent.appLauncher.setCategory(I18n.tr("All"))
+            }
+            if (spotlightContent.fileSearchController) {
+                spotlightContent.fileSearchController.reset()
+            }
+            if (spotlightContent.resetScroll) {
+                spotlightContent.resetScroll()
+            }
+            if (spotlightContent.searchField) {
+                spotlightContent.searchField.text = ""
+            }
+        }
     }
 
     function toggle() {
@@ -44,9 +81,9 @@ DankModal {
     }
 
     shouldBeVisible: spotlightOpen
-    width: 550
+    width: 500
     height: 600
-    backgroundColor: Theme.popupBackground()
+    backgroundColor: Theme.withAlpha(Theme.surfaceContainer, Theme.popupTransparency)
     cornerRadius: Theme.cornerRadius
     borderColor: Theme.outlineMedium
     borderWidth: 1
@@ -56,10 +93,10 @@ DankModal {
                           if (visible && !spotlightOpen) {
                               show()
                           }
-                          if (visible && contentLoader.item) {
+                          if (visible && spotlightContent) {
                               Qt.callLater(() => {
-                                               if (contentLoader.item.searchField) {
-                                                   contentLoader.item.searchField.forceActiveFocus()
+                                               if (spotlightContent.searchField) {
+                                                   spotlightContent.searchField.forceActiveFocus()
                                                }
                                            })
                           }
@@ -67,20 +104,6 @@ DankModal {
     onBackgroundClicked: () => {
                              return hide()
                          }
-    content: spotlightContent
-
-    Timer {
-        id: cleanupTimer
-
-        interval: animationDuration + 50
-        onTriggered: {
-            if (contentLoader.item && contentLoader.item.appLauncher) {
-                contentLoader.item.appLauncher.searchQuery = ""
-                contentLoader.item.appLauncher.selectedIndex = 0
-                contentLoader.item.appLauncher.setCategory("All")
-            }
-        }
-    }
 
     Connections {
         function onCloseAllModalsExcept(excludedModal) {
@@ -93,27 +116,43 @@ DankModal {
     }
 
     IpcHandler {
-        function open(): string  {
+        function open(): string {
             spotlightModal.show()
             return "SPOTLIGHT_OPEN_SUCCESS"
         }
 
-        function close(): string  {
+        function close(): string {
             spotlightModal.hide()
             return "SPOTLIGHT_CLOSE_SUCCESS"
         }
 
-        function toggle(): string  {
+        function toggle(): string {
             spotlightModal.toggle()
             return "SPOTLIGHT_TOGGLE_SUCCESS"
+        }
+
+        function openQuery(query: string): string {
+            spotlightModal.showWithQuery(query)
+            return "SPOTLIGHT_OPEN_QUERY_SUCCESS"
+        }
+
+        function toggleQuery(query: string): string {
+            if (spotlightModal.spotlightOpen) {
+                spotlightModal.hide()
+            } else {
+                spotlightModal.showWithQuery(query)
+            }
+            return "SPOTLIGHT_TOGGLE_QUERY_SUCCESS"
         }
 
         target: "spotlight"
     }
 
-    spotlightContent: Component {
-        SpotlightContent {
-            parentModal: spotlightModal
-        }
+    SpotlightContent {
+        id: spotlightContentInstance
+
+        parentModal: spotlightModal
     }
+
+    directContent: spotlightContentInstance
 }
