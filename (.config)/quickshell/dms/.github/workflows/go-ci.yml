@@ -1,0 +1,42 @@
+name: Go CI
+
+on:
+  push:
+    branches:
+      - '**'
+    paths:
+      - 'core/**'
+      - '.github/workflows/go-ci.yml'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: core
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: ./core/go.mod
+
+      - name: Format check
+        run: |
+          if [ "$(gofmt -s -l . | wc -l)" -gt 0 ]; then
+            echo "The following files are not formatted:"
+            gofmt -s -l .
+            exit 1
+          fi
+
+      - name: Test
+        run: go test -v ./...
+
+      - name: Build dms
+        run: go build -v ./cmd/dms
+
+      - name: Build dankinstall
+        run: go build -v ./cmd/dankinstall

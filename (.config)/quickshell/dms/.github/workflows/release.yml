@@ -1,47 +1,179 @@
-# Release from a dispatch event from the danklinux repo
-name: Create Release from DMS
+name: Release
 
 on:
-  repository_dispatch:
-    types: [dms_release]
+  push:
+    tags:
+      - 'v*'
 
 permissions:
   contents: write
   actions: write
 
 concurrency:
-  group: release-${{ github.event.client_payload.tag }}
+  group: release-${{ github.ref_name }}
   cancel-in-progress: true
 
 jobs:
-  create_release_from_dms:
-    runs-on: ubuntu-24.04
-    env:
-      TAG: ${{ github.event.client_payload.tag }}
-      DMS_REPO: ${{ github.event.client_payload.dms_repo }}
+  build-core:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [amd64, arm64]
+
+    defaults:
+      run:
+        working-directory: core
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Ensure VERSION and tag
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: ./core/go.mod
+
+      - name: Run tests
+        run: go test -v ./...
+
+      - name: Build dankinstall (${{ matrix.arch }})
+        env:
+          GOOS: linux
+          CGO_ENABLED: 0
+          GOARCH: ${{ matrix.arch }}
         run: |
-          set -euxo pipefail
-          git config user.name  "github-actions[bot]"
+          set -eux
+          cd cmd/dankinstall
+          go build -trimpath -ldflags "-s -w -X main.Version=${GITHUB_REF#refs/tags/}" \
+            -o ../../dankinstall-${{ matrix.arch }}
+          cd ../..
+          gzip -9 -k dankinstall-${{ matrix.arch }}
+          sha256sum dankinstall-${{ matrix.arch }}.gz > dankinstall-${{ matrix.arch }}.gz.sha256
+
+      - name: Build dms (${{ matrix.arch }})
+        env:
+          GOOS: linux
+          CGO_ENABLED: 0
+          GOARCH: ${{ matrix.arch }}
+        run: |
+          set -eux
+          cd cmd/dms
+          go build -trimpath -ldflags "-s -w -X main.Version=${GITHUB_REF#refs/tags/}" \
+            -o ../../dms-${{ matrix.arch }}
+          cd ../..
+          gzip -9 -k dms-${{ matrix.arch }}
+          sha256sum dms-${{ matrix.arch }}.gz > dms-${{ matrix.arch }}.gz.sha256
+
+      - name: Generate shell completions
+        if: matrix.arch == 'amd64'
+        run: |
+          set -eux
+          chmod +x dms-amd64
+          ./dms-amd64 completion bash > completion.bash
+          ./dms-amd64 completion fish > completion.fish
+          ./dms-amd64 completion zsh > completion.zsh
+
+      - name: Build dms-distropkg (${{ matrix.arch }})
+        env:
+          GOOS: linux
+          CGO_ENABLED: 0
+          GOARCH: ${{ matrix.arch }}
+        run: |
+          set -eux
+          cd cmd/dms
+          go build -trimpath -tags distro_binary -ldflags "-s -w -X main.Version=${GITHUB_REF#refs/tags/}" \
+            -o ../../dms-distropkg-${{ matrix.arch }}
+          cd ../..
+          gzip -9 -k dms-distropkg-${{ matrix.arch }}
+          sha256sum dms-distropkg-${{ matrix.arch }}.gz > dms-distropkg-${{ matrix.arch }}.gz.sha256
+
+      - name: Upload artifacts (${{ matrix.arch }})
+        if: matrix.arch == 'arm64'
+        uses: actions/upload-artifact@v4
+        with:
+          name: core-assets-${{ matrix.arch }}
+          path: |
+            core/dankinstall-${{ matrix.arch }}.gz
+            core/dankinstall-${{ matrix.arch }}.gz.sha256
+            core/dms-${{ matrix.arch }}.gz
+            core/dms-${{ matrix.arch }}.gz.sha256
+            core/dms-distropkg-${{ matrix.arch }}.gz
+            core/dms-distropkg-${{ matrix.arch }}.gz.sha256
+          if-no-files-found: error
+
+      - name: Upload artifacts with completions
+        if: matrix.arch == 'amd64'
+        uses: actions/upload-artifact@v4
+        with:
+          name: core-assets-${{ matrix.arch }}
+          path: |
+            core/dankinstall-${{ matrix.arch }}.gz
+            core/dankinstall-${{ matrix.arch }}.gz.sha256
+            core/dms-${{ matrix.arch }}.gz
+            core/dms-${{ matrix.arch }}.gz.sha256
+            core/dms-distropkg-${{ matrix.arch }}.gz
+            core/dms-distropkg-${{ matrix.arch }}.gz.sha256
+            core/completion.bash
+            core/completion.fish
+            core/completion.zsh
+          if-no-files-found: error
+
+  update-versions:
+    runs-on: ubuntu-latest
+    needs: build-core
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Update VERSION
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          echo "${TAG}" > VERSION
+          version="${GITHUB_REF#refs/tags/}"
+          version_no_v="${version#v}"
+          echo "Updating to version: $version"
 
-          git add -A VERSION
+          # Update VERSION file in quickshell/
+          echo "${version}" > quickshell/VERSION
+
+          git add quickshell/VERSION
 
           if ! git diff --cached --quiet; then
-            git commit -m "Update VERSION to ${TAG} (from DMS)"
+            git commit -m "chore: bump version to $version"
+            git push origin HEAD:master || git push origin HEAD:main
+            echo "Pushed version updates to master"
+          else
+            echo "No version changes needed"
           fi
 
-          git tag -f "${TAG}"
+          # Force-push the tag to point to the commit with updated VERSION
+          git tag -f "${version}"
+          git push -f origin "${version}"
 
-          git push origin HEAD
-          git push -f origin "${TAG}"
+  release:
+    runs-on: ubuntu-24.04
+    needs: [build-core, update-versions]
+    env:
+      TAG: ${{ github.ref_name }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download core artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: core-assets-*
+          merge-multiple: true
+          path: ./_core_assets
 
       - name: Generate Changelog
         id: changelog
@@ -55,17 +187,25 @@ jobs:
           fi
 
           cat > RELEASE_BODY.md << 'EOF'
+          ## Installation
+
+          ```bash
+          curl -fsSL https://install.danklinux.com | sh
+          ```
+
           ## Assets
 
           ### Complete Packages
-          - **`dms-full-amd64.tar.gz`** - Complete package for x86_64 systems (CLI binaries + QML source + installation guide)
-          - **`dms-full-arm64.tar.gz`** - Complete package for ARM64 systems (CLI binaries + QML source + installation guide)
+          - **`dms-full-amd64.tar.gz`** - Complete package for x86_64 systems (CLI binaries + QML source + shell completions + installation guide)
+          - **`dms-full-arm64.tar.gz`** - Complete package for ARM64 systems (CLI binaries + QML source + shell completions + installation guide)
 
           ### Individual Components
           - **`dms-cli-amd64.gz`** - DMS CLI binary for x86_64 systems
           - **`dms-cli-arm64.gz`** - DMS CLI binary for ARM64 systems
           - **`dms-distropkg-amd64.gz`** - DMS CLI binary built with distro_package tag for AMD64 systems
           - **`dms-distropkg-arm64.gz`** - DMS CLI binary built with distro_package tag for ARM64 systems
+          - **`dankinstall-amd64.gz`** - Installer binary for x86_64 systems
+          - **`dankinstall-arm64.gz`** - Installer binary for ARM64 systems
           - **`dms-qml.tar.gz`** - QML source code only
 
           ### Checksums
@@ -89,30 +229,14 @@ jobs:
           cat RELEASE_BODY.md >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
-      - name: Create/Update DankMaterialShell Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ env.TAG }}
-          name: Release ${{ env.TAG }}
-          body: ${{ steps.changelog.outputs.changelog }}
-          draft: false
-          prerelease: ${{ contains(env.TAG, '-') }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Download and prepare release assets
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Prepare release assets
         run: |
           set -euxo pipefail
 
           mkdir -p _release_assets
 
-          # Download DMS CLI binaries from the danklinux repo
-          gh release download "${TAG}" -R "${DMS_REPO}" --dir ./_dms_assets
-
-          # Rename CLI binaries to dms-cli-* format and copy distropkg binaries
-          for file in _dms_assets/dms-*.gz*; do
+          # Copy core binaries and rename dms-*.gz to dms-cli-*.gz
+          for file in _core_assets/dms-*.gz*; do
             if [ -f "$file" ]; then
               basename=$(basename "$file")
               if [[ "$basename" == dms-distropkg-* ]]; then
@@ -124,13 +248,21 @@ jobs:
             fi
           done
 
-          # Create QML source package (exclude .git, .github, build artifacts)
-          tar --exclude='.git' \
+          # Copy dankinstall binaries
+          cp _core_assets/dankinstall-*.gz* _release_assets/
+
+          # Copy completions
+          cp _core_assets/completion.* _release_assets/ 2>/dev/null || true
+
+          # Create QML source package (exclude build artifacts and git files)
+          # Copy root LICENSE and CONTRIBUTING.md to quickshell/ for packaging
+          cp LICENSE CONTRIBUTING.md quickshell/
+
+          # Tar the CONTENTS of quickshell/, not the directory itself
+          (cd quickshell && tar --exclude='.git' \
               --exclude='.github' \
-              --exclude='_dms_assets' \
-              --exclude='_release_assets' \
               --exclude='*.tar.gz' \
-              -czf _release_assets/dms-qml.tar.gz .
+              -czf ../_release_assets/dms-qml.tar.gz .)
 
           # Generate checksum for QML package
           (cd _release_assets && sha256sum dms-qml.tar.gz > dms-qml.tar.gz.sha256)
@@ -139,24 +271,36 @@ jobs:
           for arch in amd64 arm64; do
             mkdir -p _temp_full/dms
             mkdir -p _temp_full/bin
+            mkdir -p _temp_full/completions
 
-            # Extract QML source to temp directory
+            # Extract QML source
             tar -xzf _release_assets/dms-qml.tar.gz -C _temp_full/dms
 
-            # Copy CLI binary if it exists
-            if [ -f "_dms_assets/dms-${arch}.gz" ]; then
-              gunzip -c "_dms_assets/dms-${arch}.gz" > _temp_full/bin/dms
+            # Add CLI binaries
+            if [ -f "_core_assets/dms-${arch}.gz" ]; then
+              gunzip -c "_core_assets/dms-${arch}.gz" > _temp_full/bin/dms
               chmod +x _temp_full/bin/dms
             fi
 
-            # Copy distropkg binary if it exists
-            if [ -f "_dms_assets/dms-distropkg-${arch}.gz" ]; then
-              gunzip -c "_dms_assets/dms-distropkg-${arch}.gz" > _temp_full/bin/dms-distropkg
+            if [ -f "_core_assets/dms-distropkg-${arch}.gz" ]; then
+              gunzip -c "_core_assets/dms-distropkg-${arch}.gz" > _temp_full/bin/dms-distropkg
               chmod +x _temp_full/bin/dms-distropkg
             fi
 
-            # Create INSTALL.md
-            cat > _temp_full/INSTALL.md << 'EOF'
+            # Add shell completions
+            for completion in _core_assets/completion.*; do
+              if [ -f "$completion" ]; then
+                cp "$completion" _temp_full/completions/
+              fi
+            done
+
+            # Copy docs directory
+            if [ -d "docs" ]; then
+              cp -r docs _temp_full/
+            fi
+
+            # Create installation guide
+            cat > _temp_full/INSTALL.md << 'EOFINSTALL'
           # DankMaterialShell Installation
 
           ## Requirements
@@ -176,16 +320,23 @@ jobs:
           2. **Install the DMS CLI binaries:**
              ```bash
              sudo install -m 755 bin/dms /usr/local/bin/dms
-             # or install to a local directory:
-             mkdir -p ~/.local/bin
-             install -m 755 bin/dms ~/.local/bin/dms
              ```
 
-          3. **Start the shell:**
+          3. **Install shell completions (optional):**
+             ```bash
+             # Bash
+             sudo install -m 644 completions/completion.bash /usr/share/bash-completion/completions/dms
+
+             # Fish
+             sudo install -m 644 completions/completion.fish /usr/share/fish/vendor_completions.d/dms.fish
+
+             # Zsh
+             sudo install -m 644 completions/completion.zsh /usr/share/zsh/site-functions/_dms
+             ```
+
+          4. **Start the shell:**
              ```bash
              dms run
-             # or directly with quickshell (will lack some dbus integrations & plugin management):
-             quickshell -p ~/.config/quickshell/dms
              ```
 
           ## Configuration
@@ -196,10 +347,9 @@ jobs:
 
           ## Troubleshooting
 
-          - Run with verbose output: `quickshell -v -p ~/.config/quickshell/dms`
-          - Check logs in `~/.local/state/DankMaterialShell/`
+          - Run with verbose output: `DMS_LOG_LEVEL=debug dms run`
           - Ensure all dependencies are installed
-          EOF
+          EOFINSTALL
 
             # Create the full package
             (cd _temp_full && tar -czf "../_release_assets/dms-full-${arch}.tar.gz" .)
@@ -211,11 +361,257 @@ jobs:
             rm -rf _temp_full
           done
 
-      - name: Attach all assets to release
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.TAG }}
+          name: Release ${{ env.TAG }}
+          body: ${{ steps.changelog.outputs.changelog }}
           files: _release_assets/**
+          draft: false
+          prerelease: ${{ contains(env.TAG, '-') }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  copr-build:
+    runs-on: ubuntu-latest
+    needs: release
+    env:
+      TAG: ${{ github.ref_name }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Determine version
+        id: version
+        run: |
+          VERSION="${TAG#v}"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Building DMS stable version: $VERSION"
+
+      - name: Setup build environment
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y rpm wget curl jq gzip
+          mkdir -p ~/rpmbuild/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS}
+
+      - name: Download release assets
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          cd ~/rpmbuild/SOURCES
+
+          wget "https://github.com/AvengeMedia/DankMaterialShell/releases/download/v${VERSION}/dms-qml.tar.gz" || {
+            echo "Failed to download dms-qml.tar.gz for v${VERSION}"
+            exit 1
+          }
+
+      - name: Generate stable spec file
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          CHANGELOG_DATE="$(date '+%a %b %d %Y')"
+
+          cat > ~/rpmbuild/SPECS/dms.spec <<'SPECEOF'
+          # Spec for DMS stable releases - Generated by GitHub Actions
+
+          %global debug_package %{nil}
+          %global version VERSION_PLACEHOLDER
+          %global pkg_summary DankMaterialShell - Material 3 inspired shell for Wayland compositors
+
+          Name:           dms
+          Version:        %{version}
+          Release:        1%{?dist}
+          Summary:        %{pkg_summary}
+
+          License:        MIT
+          URL:            https://github.com/AvengeMedia/DankMaterialShell
+
+          Source0:        dms-qml.tar.gz
+
+          BuildRequires:  gzip
+          BuildRequires:  wget
+          BuildRequires:  systemd-rpm-macros
+
+          Requires:       (quickshell or quickshell-git)
+          Requires:       accountsservice
+          Requires:       dms-cli
+          Requires:       dgop
+
+          Recommends:     cava
+          Recommends:     cliphist
+          Recommends:     danksearch
+          Recommends:     hyprpicker
+          Recommends:     matugen
+          Recommends:     wl-clipboard
+          Recommends:     NetworkManager
+          Recommends:     qt6-qtmultimedia
+          Suggests:       qt6ct
+
+          %description
+          DankMaterialShell (DMS) is a modern Wayland desktop shell built with Quickshell
+          and optimized for the niri and hyprland compositors. Features notifications,
+          app launcher, wallpaper customization, and fully customizable with plugins.
+
+          Includes auto-theming for GTK/Qt apps with matugen, 20+ customizable widgets,
+          process monitoring, notification center, clipboard history, dock, control center,
+          lock screen, and comprehensive plugin system.
+
+          %package -n dms-cli
+          Summary:        DankMaterialShell CLI tool
+          License:        MIT
+          URL:            https://github.com/AvengeMedia/DankMaterialShell
+
+          %description -n dms-cli
+          Command-line interface for DankMaterialShell configuration and management.
+          Provides native DBus bindings, NetworkManager integration, and system utilities.
+
+          %package -n dgop
+          Summary:        Stateless CPU/GPU monitor for DankMaterialShell
+          License:        MIT
+          URL:            https://github.com/AvengeMedia/dgop
+          Provides:       dgop
+
+          %description -n dgop
+          DGOP is a stateless system monitoring tool that provides CPU, GPU, memory, and
+          network statistics. Designed for integration with DankMaterialShell but can be
+          used standalone. This package always includes the latest stable dgop release.
+
+          %prep
+          %setup -q -c -n dms-qml
+
+          # Download architecture-specific binaries during build
+          case "%{_arch}" in
+            x86_64)
+              ARCH_SUFFIX="amd64"
+              ;;
+            aarch64)
+              ARCH_SUFFIX="arm64"
+              ;;
+            *)
+              echo "Unsupported architecture: %{_arch}"
+              exit 1
+              ;;
+          esac
+
+          wget -O %{_builddir}/dms-cli.gz "https://github.com/AvengeMedia/DankMaterialShell/releases/latest/download/dms-distropkg-${ARCH_SUFFIX}.gz" || {
+            echo "Failed to download dms-cli for architecture %{_arch}"
+            exit 1
+          }
+          gunzip -c %{_builddir}/dms-cli.gz > %{_builddir}/dms-cli
+          chmod +x %{_builddir}/dms-cli
+
+          wget -O %{_builddir}/dgop.gz "https://github.com/AvengeMedia/dgop/releases/latest/download/dgop-linux-${ARCH_SUFFIX}.gz" || {
+            echo "Failed to download dgop for architecture %{_arch}"
+            exit 1
+          }
+          gunzip -c %{_builddir}/dgop.gz > %{_builddir}/dgop
+          chmod +x %{_builddir}/dgop
+
+          %build
+
+          %install
+          install -Dm755 %{_builddir}/dms-cli %{buildroot}%{_bindir}/dms
+          install -Dm755 %{_builddir}/dgop %{buildroot}%{_bindir}/dgop
+
+          install -d %{buildroot}%{_datadir}/bash-completion/completions
+          install -d %{buildroot}%{_datadir}/zsh/site-functions
+          install -d %{buildroot}%{_datadir}/fish/vendor_completions.d
+          %{_builddir}/dms-cli completion bash > %{buildroot}%{_datadir}/bash-completion/completions/dms || :
+          %{_builddir}/dms-cli completion zsh > %{buildroot}%{_datadir}/zsh/site-functions/_dms || :
+          %{_builddir}/dms-cli completion fish > %{buildroot}%{_datadir}/fish/vendor_completions.d/dms.fish || :
+
+          install -Dm644 %{_builddir}/dms-qml/assets/systemd/dms.service %{buildroot}%{_userunitdir}/dms.service
+
+          install -dm755 %{buildroot}%{_datadir}/quickshell/dms
+          cp -r %{_builddir}/dms-qml/* %{buildroot}%{_datadir}/quickshell/dms/
+
+          rm -rf %{buildroot}%{_datadir}/quickshell/dms/.git*
+          rm -f %{buildroot}%{_datadir}/quickshell/dms/.gitignore
+          rm -rf %{buildroot}%{_datadir}/quickshell/dms/.github
+          rm -rf %{buildroot}%{_datadir}/quickshell/dms/distro
+
+          %posttrans
+          if [ -d "%{_sysconfdir}/xdg/quickshell/dms" ]; then
+              rmdir "%{_sysconfdir}/xdg/quickshell/dms" 2>/dev/null || true
+              rmdir "%{_sysconfdir}/xdg/quickshell" 2>/dev/null || true
+              rmdir "%{_sysconfdir}/xdg" 2>/dev/null || true
+          fi
+
+          if [ "$1" -ge 2 ]; then
+            pkill -USR1 -x dms >/dev/null 2>&1 || true
+          fi
+
+          %files
+          %license LICENSE
+          %doc README.md CONTRIBUTING.md
+          %{_datadir}/quickshell/dms/
+          %{_userunitdir}/dms.service
+
+          %files -n dms-cli
+          %{_bindir}/dms
+          %{_datadir}/bash-completion/completions/dms
+          %{_datadir}/zsh/site-functions/_dms
+          %{_datadir}/fish/vendor_completions.d/dms.fish
+
+          %files -n dgop
+          %{_bindir}/dgop
+
+          %changelog
+          * CHANGELOG_DATE_PLACEHOLDER AvengeMedia <contact@avengemedia.com> - VERSION_PLACEHOLDER-1
+          - Stable release VERSION_PLACEHOLDER
+          - Built from GitHub release
+          - Includes latest dms-cli and dgop binaries
+          SPECEOF
+
+          sed -i "s/VERSION_PLACEHOLDER/${VERSION}/g" ~/rpmbuild/SPECS/dms.spec
+          sed -i "s/CHANGELOG_DATE_PLACEHOLDER/${CHANGELOG_DATE}/g" ~/rpmbuild/SPECS/dms.spec
+
+      - name: Build SRPM
+        id: build
+        run: |
+          cd ~/rpmbuild/SPECS
+          rpmbuild -bs dms.spec
+
+          SRPM=$(ls ~/rpmbuild/SRPMS/*.src.rpm | tail -n 1)
+          SRPM_NAME=$(basename "$SRPM")
+
+          echo "srpm_path=$SRPM" >> $GITHUB_OUTPUT
+          echo "srpm_name=$SRPM_NAME" >> $GITHUB_OUTPUT
+          echo "SRPM built: $SRPM_NAME"
+
+      - name: Upload SRPM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dms-stable-srpm-${{ steps.version.outputs.version }}
+          path: ${{ steps.build.outputs.srpm_path }}
+          retention-days: 90
+
+      - name: Install Copr CLI
+        run: |
+          sudo apt-get install -y python3-pip
+          pip3 install copr-cli
+
+          mkdir -p ~/.config
+          cat > ~/.config/copr << EOF
+          [copr-cli]
+          login = ${{ secrets.COPR_LOGIN }}
+          username = avengemedia
+          token = ${{ secrets.COPR_TOKEN }}
+          copr_url = https://copr.fedorainfracloud.org
+          EOF
+          chmod 600 ~/.config/copr
+
+      - name: Upload to Copr
+        run: |
+          SRPM="${{ steps.build.outputs.srpm_path }}"
+          VERSION="${{ steps.version.outputs.version }}"
+
+          echo "Uploading SRPM to avengemedia/dms..."
+          BUILD_OUTPUT=$(copr-cli build avengemedia/dms "$SRPM" --nowait 2>&1)
+          echo "$BUILD_OUTPUT"
+
+          BUILD_ID=$(echo "$BUILD_OUTPUT" | grep -oP 'Build was added to.*\K[0-9]+' || echo "unknown")
+
+          if [ "$BUILD_ID" != "unknown" ]; then
+            echo "Build submitted: https://copr.fedorainfracloud.org/coprs/avengemedia/dms/build/$BUILD_ID/"
+          fi

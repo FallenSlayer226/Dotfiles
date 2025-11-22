@@ -9,7 +9,7 @@ Version:        %{version}
 Release:        0.git%{?dist}
 Summary:        %{pkg_summary}
 
-License:        GPL-3.0-only
+License:        MIT
 URL:            https://github.com/AvengeMedia/DankMaterialShell
 VCS:            {{{ git_repo_vcs }}}
 Source0:        {{{ git_repo_pack }}}
@@ -44,18 +44,21 @@ authentication, and dynamic theming.
 {{{ git_repo_setup_macro }}}
 
 %install
-# Install greeter files to shared data location
+# Install greeter files to shared data location (from quickshell/ subdirectory)
 install -dm755 %{buildroot}%{_datadir}/quickshell/dms-greeter
-cp -r * %{buildroot}%{_datadir}/quickshell/dms-greeter/
+cp -r quickshell/* %{buildroot}%{_datadir}/quickshell/dms-greeter/
 
 # Install launcher script
-install -Dm755 Modules/Greetd/assets/dms-greeter %{buildroot}%{_bindir}/dms-greeter
+install -Dm755 quickshell/Modules/Greetd/assets/dms-greeter %{buildroot}%{_bindir}/dms-greeter
 
 # Install documentation
-install -Dm644 Modules/Greetd/README.md %{buildroot}%{_docdir}/dms-greeter/README.md
+install -Dm644 quickshell/Modules/Greetd/README.md %{buildroot}%{_docdir}/dms-greeter/README.md
 
 # Create cache directory for greeter data
-install -Dpm0644 ./systemd/tmpfiles-dms-greeter.conf %{buildroot}%{_tmpfilesdir}/dms-greeter.conf
+install -Dpm0644 quickshell/systemd/tmpfiles-dms-greeter.conf %{buildroot}%{_tmpfilesdir}/dms-greeter.conf
+
+# Install LICENSE file
+install -Dm644 LICENSE %{buildroot}%{_docdir}/dms-greeter/LICENSE
 
 # Create greeter home directory
 install -dm755 %{buildroot}%{_sharedstatedir}/greeter
@@ -67,9 +70,7 @@ install -dm755 %{buildroot}%{_sharedstatedir}/greeter
 rm -rf %{buildroot}%{_datadir}/quickshell/dms-greeter/.git*
 rm -f %{buildroot}%{_datadir}/quickshell/dms-greeter/.gitignore
 rm -rf %{buildroot}%{_datadir}/quickshell/dms-greeter/.github
-rm -f %{buildroot}%{_datadir}/quickshell/dms-greeter/*.spec
-rm -f %{buildroot}%{_datadir}/quickshell/dms-greeter/dms.spec
-rm -f %{buildroot}%{_datadir}/quickshell/dms-greeter/dms-greeter.spec
+rm -rf %{buildroot}%{_datadir}/quickshell/dms-greeter/distro
 
 %posttrans
 # Clean up old installation path from previous versions (only if empty)
@@ -81,7 +82,7 @@ if [ -d "%{_sysconfdir}/xdg/quickshell/dms-greeter" ]; then
 fi
 
 %files
-%license LICENSE
+%license %{_docdir}/dms-greeter/LICENSE
 %doc %{_docdir}/dms-greeter/README.md
 %{_bindir}/dms-greeter
 %{_datadir}/quickshell/dms-greeter/

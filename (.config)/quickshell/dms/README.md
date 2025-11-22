@@ -1,11 +1,11 @@
-# DankMaterialShell (dms)
+# DankMaterialShell
 
 <div align="center">
   <a href="https://danklinux.com">
-    <img src="assets/danklogo2.svg" alt="DankMaterialShell Logo" width="200">
+    <img src="assets/danklogo.svg" alt="DankMaterialShell" width="200">
   </a>
 
-  ### A modern Wayland desktop shell
+  ### A modern desktop shell for Wayland
 
   Built with [Quickshell](https://quickshell.org/) and [Go](https://go.dev/)
 
@@ -19,16 +19,29 @@
 
 </div>
 
-DankMaterialShell is a complete desktop shell for [niri](https://github.com/YaLTeR/niri), [Hyprland](https://hypr.land), [MangoWC](https://github.com/DreamMaoMao/mangowc), [Sway](https://swaywm.org), and other Wayland compositors. It replaces waybar, swaylock, swayidle, mako, fuzzel, polkit, and everything else you'd normally stitch together to make a desktop - all in one cohesive package with a gorgeous interface.
+DankMaterialShell is a complete desktop shell for [niri](https://github.com/YaLTeR/niri), [Hyprland](https://hyprland.org/), [MangoWC](https://github.com/DreamMaoMao/mangowc), [Sway](https://swaywm.org), and other Wayland compositors. It replaces waybar, swaylock, swayidle, mako, fuzzel, polkit, and everything else you'd normally stitch together to make a desktop.
 
-## Components
+## Repository Structure
 
-DankMaterialShell combines two main components:
+This is a monorepo containing both the shell interface and the core backend services:
 
-- **[QML/UI Layer](https://github.com/AvengeMedia/DankMaterialShell)** (this repo) - All the visual components, widgets, and shell interface built with Quickshell
-- **[Go Backend](https://github.com/AvengeMedia/danklinux)** - System integration, IPC, process management, and core services
-
----
+```
+DankMaterialShell/
+├── quickshell/         # QML-based shell interface
+│   ├── Modules/        # UI components (panels, widgets, overlays)
+│   ├── Services/       # System integration (audio, network, bluetooth)
+│   ├── Widgets/        # Reusable UI controls
+│   └── Common/         # Shared resources and themes
+├── core/               # Go backend and CLI
+│   ├── cmd/            # dms CLI and dankinstall binaries
+│   ├── internal/       # System integration, IPC, distro support
+│   └── pkg/            # Shared packages
+├── distro/             # Distribution packaging
+│   ├── fedora/         # Fedora RPM specs
+│   ├── debian/         # Debian packaging
+│   └── nix/            # NixOS/home-manager modules
+└── flake.nix           # Nix flake for declarative installation
+```
 
 ## See it in Action
 
@@ -54,166 +67,122 @@ https://github.com/user-attachments/assets/1200a739-7770-4601-8b85-695ca527819a
 
 </details>
 
----
-
-## Quick Install
+## Installation
 
 ```bash
 curl -fsSL https://install.danklinux.com | sh
 ```
 
-That's it. One command installs dms and all dependencies on Arch, Fedora, Debian, Ubuntu, or openSUSE.
+One command installs DMS and all dependencies on Arch, Fedora, Debian, Ubuntu, openSUSE, or Gentoo.
 
-**[Manual Installation Guide →](https://danklinux.com/docs/dankmaterialshell/installation)**
+**[Manual installation guide](https://danklinux.com/docs/dankmaterialshell/installation)**
 
----
-
-## What You Get
+## Features
 
 **Dynamic Theming**
-Wallpaper-based color schemes that automatically theme GTK, Qt, terminals, editors (like vscode, vscodium), and more with [matugen](https://github.com/InioX/matugen) and [dank16](https://github.com/AvengeMedia/danklinux/blob/master/internal/dank16/dank16.go).
+Wallpaper-based color schemes that automatically theme GTK, Qt, terminals, editors (vscode, vscodium), and more using [matugen](https://github.com/InioX/matugen) and dank16.
 
 **System Monitoring**
-Real-time CPU, RAM, GPU metrics and temps with [dgop](https://github.com/AvengeMedia/dgop). Full process list with search and management.
+Real-time CPU, RAM, GPU metrics and temperatures with [dgop](https://github.com/AvengeMedia/dgop). Process list with search and management.
 
 **Powerful Launcher**
-Spotlight-style search for apps, files (via [dsearch](https://github.com/AvengeMedia/danksearch)), emojis, running windows, calculator, commands - extensible with plugins.
+Spotlight-style search for applications, files ([dsearch](https://github.com/AvengeMedia/danksearch)), emojis, running windows, calculator, and commands. Extensible with plugins.
 
 **Control Center**
-Network, Bluetooth, audio devices, display settings, night mode - all in one clean interface.
+Unified interface for network, Bluetooth, audio devices, display settings, and night mode.
 
 **Smart Notifications**
 Notification center with grouping, rich text support, and keyboard navigation.
 
 **Media Integration**
-MPRIS player controls, calendar sync, weather widgets, clipboard history with image previews.
+MPRIS player controls, calendar sync, weather widgets, and clipboard history with image previews.
 
-**Complete Session Management**
-Lock screen, idle detection, auto-lock/suspend with separate AC/battery settings, greeter support.
+**Session Management**
+Lock screen, idle detection, auto-lock/suspend with separate AC/battery settings, and greeter support.
 
 **Plugin System**
-Endless customization with the [plugin registry](https://plugins.danklinux.com).
-
-**TL;DR** - One shell replaces waybar, swaylock, swayidle, mako, fuzzel, polkit and everything else you normally piece together to create a linux desktop.
-
----
+Extend functionality with the [plugin registry](https://plugins.danklinux.com).
 
 ## Supported Compositors
 
-DankMaterialShell works best with **[niri](https://github.com/YaLTeR/niri)**, **[Hyprland](https://hyprland.org/)**, **[sway](https://swaywm.org/)**, and **[dwl/MangoWC](https://github.com/DreamMaoMao/mangowc)** - with full workspace switching, overview integration, and monitor management.
+Works best with [niri](https://github.com/YaLTeR/niri), [Hyprland](https://hyprland.org/), [Sway](https://swaywm.org/), and [MangoWC](https://github.com/DreamMaoMao/mangowc) with full workspace switching, overview integration, and monitor management. Other Wayland compositors work with reduced features.
 
-Other Wayland compositors work too, just with a reduced feature set.
+[Compositor configuration guide](https://danklinux.com/docs/dankmaterialshell/compositors)
 
-**[Compositor configuration guide →](https://danklinux.com/docs/dankmaterialshell/compositors)**
+## Command Line Interface
 
----
-
-## Keybinds & IPC
-
-Control everything from the command line or keybinds:
+Control the shell from the command line or keybinds:
 
 ```bash
+dms run              # Start the shell
 dms ipc call spotlight toggle
 dms ipc call audio setvolume 50
 dms ipc call wallpaper set /path/to/image.jpg
-dms ipc call theme toggle
+dms brightness list  # List available displays
+dms plugins search   # Browse plugin registry
 ```
 
-**[Full keybind and IPC documentation →](https://danklinux.com/docs/dankmaterialshell/keybinds-ipc)**
-
----
-
-## Theming
-
-DankMaterialShell automatically generates color schemes from your wallpaper or theme and applies them to GTK, Qt, terminals, and more.
-
-DMS is not opinionated or forcing these themes - they are created as optional themes you can enable. You can refer to the documentation if you want to use them:
-
-**Application theming:** [GTK, Qt, Firefox, terminals, vscode+vscodium →](https://danklinux.com/docs/dankmaterialshell/application-themes)
-
-**Custom themes:** [Create your own color schemes →](https://danklinux.com/docs/dankmaterialshell/custom-themes)
-
----
-
-## Plugins
-
-Extend dms with the plugin system. Browse community plugins at [plugins.danklinux.com](https://plugins.danklinux.com).
-
-**[Plugin development guide →](https://danklinux.com/docs/dankmaterialshell/plugins-overview)**
-
----
+[Full CLI and IPC documentation](https://danklinux.com/docs/dankmaterialshell/keybinds-ipc)
 
 ## Documentation
 
-**Website:** [danklinux.com](https://danklinux.com)
+- **Website:** [danklinux.com](https://danklinux.com)
+- **Docs:** [danklinux.com/docs](https://danklinux.com/docs)
+- **Theming:** [Application themes](https://danklinux.com/docs/dankmaterialshell/application-themes) | [Custom themes](https://danklinux.com/docs/dankmaterialshell/custom-themes)
+- **Plugins:** [Development guide](https://danklinux.com/docs/dankmaterialshell/plugins-overview)
+- **Support:** [Ko-fi](https://ko-fi.com/avengemediallc)
 
-**Docs:** [danklinux.com/docs](https://danklinux.com/docs)
+## Development
 
-**Support:** [Ko-fi](https://ko-fi.com/avengemediallc)
+See component-specific documentation:
 
----
+- **[quickshell/](quickshell/)** - QML shell development, widgets, and modules
+- **[core/](core/)** - Go backend, CLI tools, and system integration
+- **[distro/](distro/)** - Distribution packaging (Fedora, Debian, NixOS)
+
+### Building from Source
+
+**Core + Dankinstall:**
+```bash
+cd core
+make              # Build dms CLI
+make dankinstall  # Build installer
+```
+
+**Shell:**
+```bash
+quickshell -p quickshell/
+```
+
+**NixOS:**
+```nix
+{
+  inputs.dms.url = "github:AvengeMedia/DankMaterialShell";
+
+  # Use in home-manager or NixOS configuration
+  imports = [ inputs.dms.homeModules.dankMaterialShell.default ];
+}
+```
 
 ## Contributing
 
-Contributions welcome! Bug fixes, new widgets, theme improvements, or docs - it all helps.
+Contributions welcome. Bug fixes, widgets, features, documentation, and plugins all help.
 
-**Contributing Code:**
 1. Fork the repository
-2. Set up the development environment
-3. Make your changes
+2. Make your changes
+3. Test thoroughly
 4. Open a pull request
 
-**Contributing Documentation:**
-1. Fork the [DankLinux-Docs](https://github.com/AvengeMedia/DankLinux-Docs) repository
-2. Update files in the `docs/` folder
-3. Open a pull request
-
-### Development Setup
-
-**Requirements:**
-- `python3` - Translation management
-
-**Git Hooks:**
-
-Enable the pre-commit hook to check translation sync status:
-
-```bash
-git config core.hooksPath .githooks
-```
-
-**Translation Workflow**
-
-Set POEditor credentials:
-
-```bash
-export POEDITOR_API_TOKEN="your_api_token"
-export POEDITOR_PROJECT_ID="your_project_id"
-```
-
-Sync translations before committing:
-
-```bash
-python3 scripts/i18nsync.py sync
-```
-
-This script:
-- Extracts strings from QML files
-- Uploads changed English terms to POEditor
-- Downloads updated translations from POEditor
-- Stages all changes for commit
-
-The pre-commit hook will block commits if translations are out of sync and remind you to run the sync script.
-
-Without POEditor credentials, the hook is skipped and commits proceed normally.
-
-Check the [issues](https://github.com/AvengeMedia/DankMaterialShell/issues) or join the community.
-
----
+For documentation contributions, see [DankLinux-Docs](https://github.com/AvengeMedia/DankLinux-Docs).
 
 ## Credits
 
-- [quickshell](https://quickshell.org/) the core of what makes a shell like this possible.
-- [niri](https://github.com/YaLTeR/niri) for the awesome scrolling compositor.
-- [Ly-sec](http://github.com/ly-sec) for awesome wallpaper effects among other things from [Noctalia](https://github.com/noctalia-dev/noctalia-shell)
-- [soramanew](https://github.com/soramanew) who built [caelestia](https://github.com/caelestia-dots/shell) which served as inspiration and guidance for many dank widgets.
-- [end-4](https://github.com/end-4) for [dots-hyprland](https://github.com/end-4/dots-hyprland) which also served as inspiration and guidance for many dank widgets.
+- [quickshell](https://quickshell.org/) - Shell framework
+- [niri](https://github.com/YaLTeR/niri) - Scrolling window manager
+- [Ly-sec](http://github.com/ly-sec) - Wallpaper effects from [Noctalia](https://github.com/noctalia-dev/noctalia-shell)
+- [soramanew](https://github.com/soramanew) - [Caelestia](https://github.com/caelestia-dots/shell) inspiration
+- [end-4](https://github.com/end-4) - [dots-hyprland](https://github.com/end-4/dots-hyprland) inspiration
+
+## License
+
+MIT License - See [LICENSE](LICENSE) for details.
