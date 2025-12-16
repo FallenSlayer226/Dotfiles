@@ -5,12 +5,21 @@ import Quickshell.Wayland
 import Quickshell.Hyprland
 import Quickshell.Widgets
 import Quickshell.Io
+import QtCore
+
+import "src"
 
 FreezeScreen {
     id: root
     visible: false
 
     property var activeScreen: null
+
+    Settings {
+        id: settings
+        category: "Hyprquickshot"
+        property bool saveToDisk: true 
+    }
 
     Connections {
         target: Hyprland
@@ -23,6 +32,12 @@ FreezeScreen {
             for (const screen of Quickshell.screens) {
                 if (screen.name === monitor.name) {
                     activeScreen = screen
+
+                    const timestamp = Date.now()
+                    const path = Quickshell.cachePath(`screenshot-${timestamp}.png`)
+                    tempPath = path
+                    Quickshell.execDetached(["grim", "-g", `${screen.x},${screen.y} ${screen.width}x${screen.height}`, path])
+                    showTimer.start()
                 }
             }
         }
@@ -34,7 +49,6 @@ FreezeScreen {
     property string tempPath
 
     property string mode: "region"
-    property bool saveToDisk: true
 
     Shortcut {
         sequence: "Escape"
@@ -52,14 +66,6 @@ FreezeScreen {
         onTriggered: root.visible = true
     }
  
-    Component.onCompleted: {
-        const timestamp = Date.now()
-        const path = Quickshell.cachePath(`screenshot-${timestamp}.png`)
-        tempPath = path
-        Quickshell.execDetached(["grim", path])
-        showTimer.start()
-    }
-
     Process {
         id: screenshotProcess
         running: false
@@ -79,17 +85,17 @@ FreezeScreen {
 
     function processScreenshot(x, y, width, height) {
         const scale = hyprlandMonitor.scale
-        const scaledX = Math.round((x + root.hyprlandMonitor.x) * scale)
-        const scaledY = Math.round((y + root.hyprlandMonitor.y) * scale)
+        const scaledX = Math.round(x * scale)
+        const scaledY = Math.round(y * scale)
         const scaledWidth = Math.round(width * scale)
         const scaledHeight = Math.round(height * scale)
 
-        const picturesDir = Quickshell.env("XDG_PICTURES_DIR") || (Quickshell.env("HOME") + "/Pictures")
+        const picturesDir = Quickshell.env("HQS_DIR") || Quickshell.env("XDG_SCREENSHOTS_DIR") || Quickshell.env("XDG_PICTURES_DIR") || (Quickshell.env("HOME") + "/Pictures")
 
         const now = new Date()
         const timestamp = Qt.formatDateTime(now, "yyyy-MM-dd_hh-mm-ss")
 
-        const outputPath = root.saveToDisk ? `${picturesDir}/screenshot-${timestamp}.png` : root.tempPath
+        const outputPath = settings.saveToDisk ? `${picturesDir}/screenshot-${timestamp}.png` : root.tempPath
 
         screenshotProcess.command = ["sh", "-c",
             `magick "${tempPath}" -crop ${scaledWidth}x${scaledHeight}+${scaledX}+${scaledY} "${outputPath}" && ` +
@@ -208,8 +214,8 @@ FreezeScreen {
 
 				Switch {
 					id: saveSwitch
-					checked: root.saveToDisk
-					onCheckedChanged: root.saveToDisk = checked
+					checked: settings.saveToDisk
+					onCheckedChanged: settings.saveToDisk = checked
 				}
 			}
 		}

@@ -1,0 +1,9 @@
+{
+  "dankActions": {
+    "enabled": true
+  },
+  "dankHooks": {
+    "enabled": true,
+    "wallpaperPath": "/home/artorias/.config/DankMaterialShell/hooks/wallpaper-changed.sh"
+  }
+}
