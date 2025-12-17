@@ -44,3 +44,8 @@ output_path = '~/.config/btop/themes/matugen.theme'
 [templates.obsidian]
 input_path = '~/.config/matugen/templates/obsidian-minimal-matugen-colors.css'
 output_path = '~/Artorias/.obsidian/snippets/colors.css'
+
+[templates.vscode]
+input_path = '~/.config/matugen/templates/vscode-settings.json'
+output_path = '~/.config/VSCodium/User/vscode-colors.json'
+post_hook = '~/vscode-apply-colors.sh'
