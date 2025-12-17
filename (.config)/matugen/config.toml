@@ -48,4 +48,9 @@ output_path = '~/Artorias/.obsidian/snippets/colors.css'
 [templates.vscode]
 input_path = '~/.config/matugen/templates/vscode-settings.json'
 output_path = '~/.config/VSCodium/User/vscode-colors.json'
-post_hook = '~/vscode-apply-colors.sh'
+post_hook = '~/.config/matugen/scripts/vscode-apply-colors.sh'
+
+[templates.spicetify]
+input_path = '~/.config/matugen/templates/spicetify.ini'
+output_path = '~/.config/spicetify/Themes/matugen/color.ini'
+post_hook = '~/.config/matugen/scripts/spiceitfy_theme_apply.sh'
