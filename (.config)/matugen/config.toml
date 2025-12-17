@@ -21,7 +21,7 @@ input_path = '~/.config/matugen/templates/gtk-colors.css'
 output_path = '~/.config/gtk-4.0/colors.css'
 
 [templates.kitty]
-input_path = '/home/artorias/.config/matugen/templates/kitty-colors.conf'
+input_path = '/home/artorias/.config/matugen/templates/kitty-colors-modified.conf'
 output_path = '~/.config/kitty/colors.conf'
 post_hook = 'pkill -SIGUSR1 kitty'
 
