@@ -5,5 +5,20 @@
   "dankHooks": {
     "enabled": true,
     "wallpaperPath": "/home/artorias/.config/DankMaterialShell/hooks/wallpaper-changed.sh"
+  },
+  "Video Player": {
+    "enabled": true
+  },
+  "wallpaperWatcherDaemon": {
+    "enabled": false
+  },
+  "VideoPlayer": {
+    "enabled": false
+  },
+  "VideoPlayerTest": {
+    "enabled": true
+  },
+  "mediaPlayer": {
+    "enabled": true
   }
 }
