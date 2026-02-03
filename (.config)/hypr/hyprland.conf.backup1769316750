@@ -213,11 +213,10 @@ device {
 
 # Example windowrule
 # windowrule = float,class:^(kitty)$,title:^(kitty)$
-windowrule = match:class ^(vesktop)$, workspace 2 silent
-# windowrule = match:class ^(discord)$, workspace 2 silent
+# windowrule = math:class ^(vesktop)$, workspace 2 silent
+windowrule = match:class ^(discord)$, workspace 2 silent
 windowrule = match:class ^(spotify)$, workspace 4 silent
 windowrule = match:class ^(org.gnome.Nautilus)$, opacity 0.95 0.95
-
 
 
 # Ignore maximize requests from apps. You'll probably like this.
@@ -257,5 +256,3 @@ workspace = 9,monitor:DP-1
 workspace = 10,monitor:HDMI-A-1
 
 source = ./dms/outputs.conf
-
-source = ./dms/cursor.conf
