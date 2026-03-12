@@ -218,14 +218,14 @@ device {
 windowrule = match:class ^(org.gnome.Nautilus)$, opacity 0.95 0.95
 
 # Single Monitor Window Rules
-# windowrule = match:class ^(vesktop)$, workspace 2 silent
-# windowrule = match:class ^(discord)$, workspace 2 silent
-# windowrule = match:class ^(spotify)$, workspace 3 silent
-
-# Multi-Monitor Window Rules
 windowrule = match:class ^(vesktop)$, workspace 2 silent
 # windowrule = match:class ^(discord)$, workspace 2 silent
-windowrule = match:class ^(spotify)$, workspace 4 silent
+windowrule = match:class ^(spotify)$, workspace 3 silent
+
+# Multi-Monitor Window Rules
+# windowrule = match:class ^(vesktop)$, workspace 2 silent
+# windowrule = match:class ^(discord)$, workspace 2 silent
+# windowrule = match:class ^(spotify)$, workspace 4 silent
 
 # Ignore maximize requests from apps. You'll probably like this.
 windowrule {
@@ -266,4 +266,3 @@ workspace = 10,monitor:HDMI-A-1
 source = ./dms/outputs.conf
 
 source = ./dms/cursor.conf
-source = ./dms/binds.conf
